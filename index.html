@@ -1,17 +1,27 @@
 <!DOCTYPE html>
 <html lang="cs">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PDF Cleaner</title>
+
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-  <h1>PDF Cleaner</h1>
-  <p>Nahraj PDF nebo fotku faktury.</p>
+  <div class="container">
+    <h1>PDF Cleaner</h1>
+    <p class="subtitle">Nahraj fakturu nebo dodací list a vytvoř CSV pro IC-Office</p>
 
-  <input type="file" />
-  <button>Odeslat</button>
+    <div class="upload-box">
+      <input type="file" id="fileInput">
+      <button onclick="upload()">Převést dokument</button>
+    </div>
 
+    <p id="status"></p>
+  </div>
+
+  <script src="script.js"></script>
 </body>
 </html>
