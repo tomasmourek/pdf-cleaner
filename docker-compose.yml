@@ -1,0 +1,67 @@
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: pdfcleaner
+      POSTGRES_PASSWORD: pdfcleaner
+      POSTGRES_DB: pdfcleaner
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  minio:
+    image: minio/minio:RELEASE.2025-01-20T14-49-07Z
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio12345
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - miniodata:/data
+
+  api:
+    build: ./backend
+    environment:
+      - DATABASE_URL=postgresql+psycopg://pdfcleaner:pdfcleaner@db:5432/pdfcleaner
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=minio
+      - STORAGE_SECRET_KEY=minio12345
+      - STORAGE_BUCKET=pdf-cleaner
+      - JWT_SECRET=change-me
+      - HANDOFF_BASE_URL=http://localhost:8000
+      - CSV_CLEANER_IMPORT_URL=https://upravcsv.eu/import
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+      - minio
+
+  worker:
+    build: ./backend
+    command: ["python", "-m", "app.tasks"]
+    environment:
+      - DATABASE_URL=postgresql+psycopg://pdfcleaner:pdfcleaner@db:5432/pdfcleaner
+      - REDIS_URL=redis://redis:6379/0
+      - STORAGE_ENDPOINT=http://minio:9000
+      - STORAGE_ACCESS_KEY=minio
+      - STORAGE_SECRET_KEY=minio12345
+      - STORAGE_BUCKET=pdf-cleaner
+      - JWT_SECRET=change-me
+    depends_on:
+      - db
+      - redis
+      - minio
+
+volumes:
+  dbdata:
+  miniodata:
