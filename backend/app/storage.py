@@ -10,3 +10,10 @@ s3 = boto3.client(
 )
 
 BUCKET = "pdf-cleaner"
+
+def upload_file(file_bytes: bytes, filename: str):
+    s3.put_object(
+        Bucket=BUCKET,
+        Key=filename,
+        Body=file_bytes
+    )
