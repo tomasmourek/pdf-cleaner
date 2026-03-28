@@ -1,27 +1,28 @@
-from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import JSONResponse
+"""upravpdf-backend — FastAPI entry point."""
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from .core.config import settings
+from .api.pdf_router import router as pdf_router
+from .api.batch_router import router as batch_router
 
-from app.storage import upload_file
+app = FastAPI(
+    title="upravpdf.eu API",
+    version="1.0.0",
+    docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
+)
 
-app = FastAPI(title="PDF Cleaner API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(pdf_router)
+app.include_router(batch_router)
 
 
-@app.get("/")
-def root():
-    return {"status": "PDF Cleaner backend running"}
-
-
-@app.post("/convert")
-async def convert(file: UploadFile = File(...)):
-    contents = await file.read()
-
-    # upload do MinIO
-    upload_file(contents, file.filename)
-
-    return JSONResponse(
-        {
-            "filename": file.filename,
-            "content_type": file.content_type,
-            "message": "Soubor byl uložen do MinIO",
-        }
-    )
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "upravpdf-backend"}
