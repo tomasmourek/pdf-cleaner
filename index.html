@@ -4,399 +4,211 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>upravpdf.eu – Extrakce dat z dokladů</title>
+
+  <!-- OCR + PDF engines -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
   <style>
-    /* ─── Design tokens ──────────────────────────────────── */
     :root {
-      --bg:          #ffffff;
-      --bg-subtle:   #f7f8fa;
-      --bg-input:    #f2f4f7;
-      --surface:     #ffffff;
-      --border:      #e4e7ec;
-      --border-mid:  #d0d5dd;
-      --text:        #101828;
-      --text-2:      #344054;
-      --text-3:      #667085;
-      --accent:      #2563eb;
-      --accent-dim:  #eff6ff;
-      --accent-mid:  #bfdbfe;
-      --accent-dark: #1d4ed8;
-      --success:     #12b76a;
-      --danger:      #f04438;
-      --shadow-sm:   0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
-      --shadow-md:   0 8px 32px rgba(16,24,40,.14), 0 2px 8px rgba(16,24,40,.08);
-      --shadow-overlay: 0 20px 60px rgba(16,24,40,.22);
-      --radius:      10px;
-      --radius-lg:   14px;
+      --bg:#ffffff; --bg-subtle:#f7f8fa; --bg-input:#f2f4f7;
+      --surface:#ffffff; --border:#e4e7ec; --border-mid:#d0d5dd;
+      --text:#101828; --text-2:#344054; --text-3:#667085;
+      --accent:#2563eb; --accent-dim:#eff6ff; --accent-mid:#bfdbfe; --accent-dark:#1d4ed8;
+      --success:#12b76a; --danger:#f04438;
+      --shadow-sm:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.06);
+      --shadow-md:0 8px 32px rgba(16,24,40,.14),0 2px 8px rgba(16,24,40,.08);
+      --shadow-overlay:0 20px 60px rgba(16,24,40,.22);
+      --radius:10px; --radius-lg:14px;
     }
     [data-theme="dark"] {
-      --bg:          #0d0f14;
-      --bg-subtle:   #131720;
-      --bg-input:    #1c2030;
-      --surface:     #171b27;
-      --border:      #262d40;
-      --border-mid:  #323a52;
-      --text:        #f2f4f7;
-      --text-2:      #d0d5dd;
-      --text-3:      #8592ad;
-      --accent:      #60a5fa;
-      --accent-dim:  #172038;
-      --accent-mid:  #1e3a5f;
-      --accent-dark: #93c5fd;
-      --shadow-sm:   0 1px 3px rgba(0,0,0,.3);
-      --shadow-md:   0 8px 32px rgba(0,0,0,.5);
-      --shadow-overlay: 0 20px 60px rgba(0,0,0,.7);
+      --bg:#0d0f14; --bg-subtle:#131720; --bg-input:#1c2030;
+      --surface:#171b27; --border:#262d40; --border-mid:#323a52;
+      --text:#f2f4f7; --text-2:#d0d5dd; --text-3:#8592ad;
+      --accent:#60a5fa; --accent-dim:#172038; --accent-mid:#1e3a5f; --accent-dark:#93c5fd;
+      --shadow-sm:0 1px 3px rgba(0,0,0,.3);
+      --shadow-md:0 8px 32px rgba(0,0,0,.5);
+      --shadow-overlay:0 20px 60px rgba(0,0,0,.7);
     }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    html{scroll-behavior:smooth}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',sans-serif;font-size:15px;line-height:1.6;background:var(--bg);color:var(--text);transition:background .25s,color .25s;min-height:100vh}
+    .icon{display:inline-block;width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;vertical-align:middle;flex-shrink:0}
+    .icon-lg{width:22px;height:22px}
+    .icon-xl{width:32px;height:32px;stroke-width:1.5}
+    .container{max-width:1080px;margin:0 auto;padding:0 24px}
+    .container-narrow{max-width:680px;margin:0 auto;padding:0 24px}
 
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
-      font-size: 15px; line-height: 1.6;
-      background: var(--bg); color: var(--text);
-      transition: background .25s, color .25s; min-height: 100vh;
-    }
+    /* Header */
+    header{position:sticky;top:0;z-index:200;background:var(--bg);border-bottom:1px solid var(--border);height:60px;display:flex;align-items:center}
+    .header-inner{width:100%;max-width:1080px;margin:0 auto;padding:0 24px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+    .logo{display:flex;align-items:center;gap:9px;text-decoration:none;color:var(--text);font-weight:700;font-size:1.05rem;letter-spacing:-.02em}
+    .logo-mark{width:30px;height:30px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;color:#fff}
+    nav{display:flex;align-items:center;gap:4px}
+    .nav-link{padding:6px 12px;border-radius:7px;font-size:.875rem;font-weight:500;color:var(--text-3);text-decoration:none;transition:color .15s,background .15s;cursor:pointer;background:none;border:none}
+    .nav-link:hover{color:var(--text);background:var(--bg-subtle)}
+    .header-actions{display:flex;align-items:center;gap:8px}
 
-    .icon { display: inline-block; width: 18px; height: 18px; stroke: currentColor; fill: none;
-            stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; flex-shrink: 0; }
-    .icon-lg { width: 22px; height: 22px; }
-    .icon-xl { width: 32px; height: 32px; stroke-width: 1.5; }
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:9px 18px;border-radius:8px;font-size:.875rem;font-weight:600;cursor:pointer;transition:all .18s;border:1px solid transparent;text-decoration:none;white-space:nowrap}
+    .btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .btn-primary:hover{background:var(--accent-dark);border-color:var(--accent-dark)}
+    .btn-secondary{background:var(--surface);color:var(--text-2);border-color:var(--border-mid)}
+    .btn-secondary:hover{background:var(--bg-subtle)}
+    .btn-ghost{background:none;color:var(--text-3);border-color:transparent}
+    .btn-ghost:hover{background:var(--bg-subtle);color:var(--text)}
+    .btn-sm{padding:6px 13px;font-size:.82rem}
+    .btn-lg{padding:12px 28px;font-size:.95rem}
+    .btn-full{width:100%}
+    .btn-success{background:var(--success);color:#fff;border-color:var(--success)}
+    .btn-success:hover{opacity:.88}
 
-    .container        { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
-    .container-narrow { max-width: 640px;  margin: 0 auto; padding: 0 24px; }
+    /* Theme toggle */
+    .theme-toggle{width:36px;height:36px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-3);transition:all .18s}
+    .theme-toggle:hover{color:var(--text);background:var(--bg-input)}
 
-    /* ─── Header ─────────────────────────────────────────── */
-    header {
-      position: sticky; top: 0; z-index: 200;
-      background: var(--bg); border-bottom: 1px solid var(--border);
-      height: 60px; display: flex; align-items: center;
-    }
-    .header-inner {
-      width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px;
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-    }
-    .logo {
-      display: flex; align-items: center; gap: 9px;
-      text-decoration: none; color: var(--text);
-      font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em;
-    }
-    .logo-mark {
-      width: 30px; height: 30px; background: var(--accent);
-      border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff;
-    }
-    nav { display: flex; align-items: center; gap: 4px; }
-    .nav-link {
-      padding: 6px 12px; border-radius: 7px; font-size: .875rem; font-weight: 500;
-      color: var(--text-3); text-decoration: none;
-      transition: color .15s, background .15s; cursor: pointer; background: none; border: none;
-    }
-    .nav-link:hover { color: var(--text); background: var(--bg-subtle); }
-    .header-actions { display: flex; align-items: center; gap: 8px; }
+    /* User badge */
+    .user-badge{display:none;align-items:center;gap:8px;padding:5px 10px 5px 5px;border-radius:8px;border:1px solid var(--border);background:var(--bg-subtle);font-size:.82rem;font-weight:600;color:var(--text-2)}
+    .user-badge.visible{display:flex}
+    .user-avatar{width:26px;height:26px;border-radius:6px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+    .btn-logout{background:none;border:none;cursor:pointer;color:var(--text-3);padding:2px 4px;border-radius:4px;display:flex;align-items:center;transition:color .15s}
+    .btn-logout:hover{color:var(--danger)}
 
-    /* ─── Buttons ─────────────────────────────────────────── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-      padding: 9px 18px; border-radius: 8px; font-size: .875rem; font-weight: 600;
-      cursor: pointer; transition: all .18s; border: 1px solid transparent;
-      text-decoration: none; white-space: nowrap;
-    }
-    .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
-    .btn-secondary { background: var(--surface); color: var(--text-2); border-color: var(--border-mid); }
-    .btn-secondary:hover { background: var(--bg-subtle); }
-    .btn-ghost { background: none; color: var(--text-3); border-color: transparent; }
-    .btn-ghost:hover { background: var(--bg-subtle); color: var(--text); }
-    .btn-sm   { padding: 6px 13px; font-size: .82rem; }
-    .btn-lg   { padding: 12px 28px; font-size: .95rem; }
-    .btn-full { width: 100%; }
-    .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
-    .btn-success:hover { opacity: .88; }
+    /* Modal */
+    .modal-backdrop{display:none;position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.52);align-items:center;justify-content:center;padding:20px}
+    .modal-backdrop.open{display:flex}
+    .modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);width:100%;max-width:420px;box-shadow:var(--shadow-overlay);overflow:hidden;animation:modalIn .2s ease}
+    @keyframes modalIn{from{opacity:0;transform:translateY(-12px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0}
+    .modal-title{font-size:1.05rem;font-weight:700}
+    .modal-close{background:none;border:none;cursor:pointer;color:var(--text-3);padding:4px;border-radius:5px;display:flex;align-items:center;transition:color .15s}
+    .modal-close:hover{color:var(--text)}
+    .modal-body{padding:20px 24px 28px;display:flex;flex-direction:column;gap:14px}
+    .modal-tabs{display:flex;background:var(--bg-input);border-radius:8px;padding:3px;gap:2px}
+    .modal-tab{flex:1;padding:7px;border-radius:6px;font-size:.84rem;font-weight:600;cursor:pointer;border:none;background:none;color:var(--text-3);transition:all .18s}
+    .modal-tab.active{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm)}
 
-    /* ─── Theme toggle ───────────────────────────────────── */
-    .theme-toggle {
-      width: 36px; height: 36px; border-radius: 8px;
-      border: 1px solid var(--border); background: var(--bg-subtle);
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      color: var(--text-3); transition: all .18s;
-    }
-    .theme-toggle:hover { color: var(--text); background: var(--bg-input); }
+    /* Form */
+    .field-group{display:flex;flex-direction:column;gap:6px}
+    .field-label{font-size:.82rem;font-weight:600;color:var(--text-2)}
+    input[type="text"],input[type="email"],input[type="password"],select{background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:.875rem;padding:9px 12px;width:100%;outline:none;transition:border-color .18s}
+    select{appearance:none;-webkit-appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;padding-right:32px}
+    input:focus,select:focus{border-color:var(--accent)}
+    input::placeholder{color:var(--text-3)}
+    .forgot-link{font-size:.8rem;color:var(--accent);text-decoration:none;text-align:right;display:block;margin-top:-4px}
+    .forgot-link:hover{text-decoration:underline}
+    .auth-divider{display:flex;align-items:center;gap:10px;color:var(--text-3);font-size:.8rem}
+    .auth-divider::before,.auth-divider::after{content:'';flex:1;height:1px;background:var(--border)}
 
-    /* ─── User badge ─────────────────────────────────────── */
-    .user-badge {
-      display: none; align-items: center; gap: 8px;
-      padding: 5px 10px 5px 5px; border-radius: 8px;
-      border: 1px solid var(--border); background: var(--bg-subtle);
-      font-size: .82rem; font-weight: 600; color: var(--text-2);
-    }
-    .user-badge.visible { display: flex; }
-    .user-avatar {
-      width: 26px; height: 26px; border-radius: 6px;
-      background: var(--accent); color: #fff;
-      display: flex; align-items: center; justify-content: center;
-      font-size: .75rem; font-weight: 700; flex-shrink: 0;
-    }
-    .btn-logout {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-3); padding: 2px 4px; border-radius: 4px;
-      display: flex; align-items: center; transition: color .15s;
-    }
-    .btn-logout:hover { color: var(--danger); }
+    /* Hero */
+    .hero{padding:72px 0 56px;text-align:center}
+    .hero-label{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;color:var(--accent);letter-spacing:.06em;text-transform:uppercase;margin-bottom:20px}
+    .hero-label-dot{width:6px;height:6px;border-radius:50%;background:var(--accent)}
+    h1{font-size:clamp(1.9rem,4vw,2.75rem);font-weight:800;letter-spacing:-.03em;line-height:1.18;color:var(--text);margin-bottom:18px}
+    h1 .accent{color:var(--accent)}
+    .hero-sub{color:var(--text-3);font-size:1.05rem;max-width:520px;margin:0 auto 36px;line-height:1.65}
+    .hero-chips{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:48px}
+    .chip{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:20px;font-size:.8rem;color:var(--text-2);font-weight:500}
 
-    /* ─── Modal ──────────────────────────────────────────── */
-    .modal-backdrop {
-      display: none; position: fixed; inset: 0; z-index: 500;
-      background: rgba(0,0,0,.52);
-      align-items: center; justify-content: center; padding: 20px;
-    }
-    .modal-backdrop.open { display: flex; }
-    .modal {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); width: 100%; max-width: 420px;
-      box-shadow: var(--shadow-overlay); overflow: hidden;
-      animation: modalIn .2s ease;
-    }
-    @keyframes modalIn {
-      from { opacity: 0; transform: translateY(-12px) scale(.97); }
-      to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .modal-header {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 20px 24px 0;
-    }
-    .modal-title { font-size: 1.05rem; font-weight: 700; }
-    .modal-close {
-      background: none; border: none; cursor: pointer;
-      color: var(--text-3); padding: 4px; border-radius: 5px;
-      display: flex; align-items: center; transition: color .15s;
-    }
-    .modal-close:hover { color: var(--text); }
-    .modal-body { padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+    /* Upload gate */
+    .upload-gate{background:var(--bg-subtle);border:2px dashed var(--border-mid);border-radius:var(--radius-lg);padding:52px 32px 48px;text-align:center}
+    .gate-icon{width:52px;height:52px;border-radius:12px;background:var(--bg-input);border:1px solid var(--border-mid);display:flex;align-items:center;justify-content:center;color:var(--text-3);margin:0 auto 20px}
+    .gate-title{font-size:1rem;font-weight:600;margin-bottom:8px}
+    .gate-sub{color:var(--text-3);font-size:.875rem;margin-bottom:24px}
+    .gate-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 
-    .modal-tabs {
-      display: flex; background: var(--bg-input);
-      border-radius: 8px; padding: 3px; gap: 2px;
-    }
-    .modal-tab {
-      flex: 1; padding: 7px; border-radius: 6px;
-      font-size: .84rem; font-weight: 600; cursor: pointer;
-      border: none; background: none; color: var(--text-3); transition: all .18s;
-    }
-    .modal-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+    /* Dropzone */
+    .dropzone{background:var(--bg-subtle);border:2px dashed var(--border-mid);border-radius:var(--radius-lg);padding:48px 32px 40px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+    .dropzone:hover,.dropzone.over{border-color:var(--accent);background:var(--accent-dim)}
+    .dropzone input[type="file"]{position:absolute;inset:0;opacity:0;cursor:pointer}
+    .dz-icon{width:52px;height:52px;border-radius:12px;background:var(--accent-dim);border:1px solid var(--accent-mid);display:flex;align-items:center;justify-content:center;color:var(--accent);margin:0 auto 18px}
+    .dz-title{font-size:1rem;font-weight:600;margin-bottom:6px}
+    .dz-sub{color:var(--text-3);font-size:.875rem;margin-bottom:20px}
+    .dz-formats{display:flex;justify-content:center;gap:6px;flex-wrap:wrap}
+    .fmt-tag{padding:3px 9px;background:var(--surface);border:1px solid var(--border);border-radius:5px;font-size:.75rem;font-weight:600;color:var(--text-3);letter-spacing:.04em}
 
-    /* ─── Form elements ──────────────────────────────────── */
-    .field-group { display: flex; flex-direction: column; gap: 6px; }
-    .field-label { font-size: .82rem; font-weight: 600; color: var(--text-2); }
-    input[type="text"], input[type="email"], input[type="password"], select {
-      background: var(--bg-input); border: 1px solid var(--border);
-      border-radius: 8px; color: var(--text); font-size: .875rem;
-      padding: 9px 12px; width: 100%; outline: none; transition: border-color .18s;
-    }
-    select {
-      appearance: none; -webkit-appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px;
-    }
-    input:focus, select:focus { border-color: var(--accent); }
-    input::placeholder { color: var(--text-3); }
-    .forgot-link {
-      font-size: .8rem; color: var(--accent); text-decoration: none;
-      text-align: right; display: block; margin-top: -4px;
-    }
-    .forgot-link:hover { text-decoration: underline; }
-    .auth-divider {
-      display: flex; align-items: center; gap: 10px;
-      color: var(--text-3); font-size: .8rem;
-    }
-    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+    /* Config panel */
+    .config-panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;box-shadow:var(--shadow-sm);margin-top:16px}
+    .config-panel.visible{display:block}
+    .config-file-bar{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--bg-subtle)}
+    .config-file-icon{width:36px;height:36px;border-radius:8px;background:var(--accent-dim);border:1px solid var(--accent-mid);display:flex;align-items:center;justify-content:center;color:var(--accent);flex-shrink:0}
+    .config-file-name{font-weight:600;font-size:.9rem;word-break:break-all}
+    .config-file-meta{color:var(--text-3);font-size:.8rem}
+    .config-file-remove{margin-left:auto;flex-shrink:0;background:none;border:none;cursor:pointer;color:var(--text-3);display:flex;align-items:center;padding:4px;border-radius:4px}
+    .config-file-remove:hover{color:var(--danger)}
+    .config-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+    .config-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 
-    /* ─── Hero ───────────────────────────────────────────── */
-    .hero { padding: 72px 0 56px; text-align: center; }
-    .hero-label {
-      display: inline-flex; align-items: center; gap: 6px;
-      font-size: .78rem; font-weight: 600; color: var(--accent);
-      letter-spacing: .06em; text-transform: uppercase; margin-bottom: 20px;
-    }
-    .hero-label-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
-    h1 {
-      font-size: clamp(1.9rem, 4vw, 2.75rem);
-      font-weight: 800; letter-spacing: -.03em; line-height: 1.18;
-      color: var(--text); margin-bottom: 18px;
-    }
-    h1 .accent { color: var(--accent); }
-    .hero-sub {
-      color: var(--text-3); font-size: 1.05rem;
-      max-width: 520px; margin: 0 auto 36px; line-height: 1.65;
-    }
-    .hero-chips {
-      display: flex; align-items: center; justify-content: center;
-      gap: 8px; flex-wrap: wrap; margin-bottom: 48px;
-    }
-    .chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 5px 12px; background: var(--bg-subtle);
-      border: 1px solid var(--border); border-radius: 20px;
-      font-size: .8rem; color: var(--text-2); font-weight: 500;
-    }
+    /* Progress */
+    .progress-wrap{display:none;padding:20px;border-top:1px solid var(--border)}
+    .progress-wrap.visible{display:block}
+    .progress-label{font-size:.82rem;font-weight:600;color:var(--text-2);margin-bottom:8px;display:flex;justify-content:space-between}
+    .progress-bar-bg{height:6px;background:var(--bg-input);border-radius:3px;overflow:hidden}
+    .progress-bar-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .3s;width:0%}
+    .progress-status{color:var(--text-3);font-size:.8rem;margin-top:8px}
 
-    /* ─── Upload gate ────────────────────────────────────── */
-    .upload-gate {
-      background: var(--bg-subtle); border: 2px dashed var(--border-mid);
-      border-radius: var(--radius-lg); padding: 52px 32px 48px; text-align: center;
-    }
-    .gate-icon {
-      width: 52px; height: 52px; border-radius: 12px;
-      background: var(--bg-input); border: 1px solid var(--border-mid);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--text-3); margin: 0 auto 20px;
-    }
-    .gate-title { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
-    .gate-sub   { color: var(--text-3); font-size: .875rem; margin-bottom: 24px; }
-    .gate-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+    /* OCR raw text toggle */
+    .ocr-raw-box{margin-top:16px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+    .ocr-raw-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;font-size:.82rem;font-weight:600;color:var(--text-2)}
+    .ocr-raw-header:hover{background:var(--bg-input)}
+    .ocr-raw-content{display:none;padding:14px;font-family:monospace;font-size:.78rem;color:var(--text-3);white-space:pre-wrap;word-break:break-word;max-height:200px;overflow-y:auto;border-top:1px solid var(--border)}
+    .ocr-raw-content.open{display:block}
 
-    /* ─── Dropzone ───────────────────────────────────────── */
-    .dropzone {
-      background: var(--bg-subtle); border: 2px dashed var(--border-mid);
-      border-radius: var(--radius-lg); padding: 52px 32px 44px;
-      text-align: center; cursor: pointer;
-      transition: border-color .2s, background .2s; position: relative;
-    }
-    .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-dim); }
-    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-    .dz-icon {
-      width: 52px; height: 52px; border-radius: 12px;
-      background: var(--accent-dim); border: 1px solid var(--accent-mid);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--accent); margin: 0 auto 20px;
-    }
-    .dz-title { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
-    .dz-sub   { color: var(--text-3); font-size: .875rem; margin-bottom: 22px; }
-    .dz-formats { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
-    .fmt-tag {
-      padding: 3px 9px; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 5px; font-size: .75rem; font-weight: 600; color: var(--text-3); letter-spacing: .04em;
-    }
+    /* Result */
+    .result-wrap{display:none;margin-top:24px}
+    .result-wrap.visible{display:block}
+    .result-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+    .result-title{font-size:.9rem;font-weight:700;display:flex;align-items:center;gap:7px}
+    .result-actions{display:flex;gap:8px}
+    .table-wrap{border:1px solid var(--border);border-radius:var(--radius);overflow:auto;box-shadow:var(--shadow-sm)}
+    table{width:100%;border-collapse:collapse;font-size:.83rem}
+    thead{background:var(--bg-subtle)}
+    th{padding:10px 14px;text-align:left;font-size:.75rem;font-weight:700;letter-spacing:.04em;color:var(--text-3);text-transform:uppercase;border-bottom:1px solid var(--border);white-space:nowrap}
+    td{padding:9px 14px;border-bottom:1px solid var(--border);color:var(--text-2)}
+    tr:last-child td{border-bottom:none}
+    tbody tr:hover td{background:var(--bg-subtle)}
+    .editable-cell{outline:none;cursor:text}
+    .editable-cell:focus{background:var(--accent-dim)}
 
-    /* ─── Config panel ───────────────────────────────────── */
-    .config-panel {
-      display: none; background: var(--surface);
-      border: 1px solid var(--border); border-radius: var(--radius-lg);
-      overflow: hidden; box-shadow: var(--shadow-sm); margin-top: 16px;
-    }
-    .config-panel.visible { display: block; }
-    .config-file-bar {
-      display: flex; align-items: center; gap: 12px;
-      padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-subtle);
-    }
-    .config-file-icon {
-      width: 36px; height: 36px; border-radius: 8px;
-      background: var(--accent-dim); border: 1px solid var(--accent-mid);
-      display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0;
-    }
-    .config-file-name { font-weight: 600; font-size: .9rem; word-break: break-all; }
-    .config-file-meta { color: var(--text-3); font-size: .8rem; }
-    .config-file-remove {
-      margin-left: auto; flex-shrink: 0; background: none; border: none; cursor: pointer;
-      color: var(--text-3); display: flex; align-items: center; padding: 4px; border-radius: 4px;
-    }
-    .config-file-remove:hover { color: var(--danger); }
-    .config-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
-    .config-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    /* CSV banner */
+    .csv-banner{margin-top:16px;background:var(--accent-dim);border:1px solid var(--accent-mid);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;font-size:.875rem}
+    .csv-banner-text{flex:1;color:var(--text-2)}
+    .csv-banner-text strong{color:var(--text)}
 
-    /* ─── Progress ───────────────────────────────────────── */
-    .progress-wrap { display: none; padding: 20px; border-top: 1px solid var(--border); }
-    .progress-wrap.visible { display: block; }
-    .progress-label {
-      font-size: .82rem; font-weight: 600; color: var(--text-2); margin-bottom: 8px;
-      display: flex; justify-content: space-between;
-    }
-    .progress-bar-bg { height: 6px; background: var(--bg-input); border-radius: 3px; overflow: hidden; }
-    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s; width: 0%; }
-    .progress-status { color: var(--text-3); font-size: .8rem; margin-top: 8px; }
+    /* Features */
+    .section{padding:64px 0}
+    .section-title{font-size:1.3rem;font-weight:700;margin-bottom:8px;letter-spacing:-.02em}
+    .section-sub{color:var(--text-3);font-size:.9rem;margin-bottom:32px}
+    .page-sep{border:none;border-top:1px solid var(--border)}
+    .features-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+    .feature-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:22px 20px}
+    .feature-icon{width:38px;height:38px;border-radius:9px;background:var(--accent-dim);border:1px solid var(--accent-mid);display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:14px}
+    .feature-name{font-weight:700;font-size:.95rem;margin-bottom:5px}
+    .feature-desc{color:var(--text-3);font-size:.83rem;line-height:1.55}
 
-    /* ─── Result table ───────────────────────────────────── */
-    .result-wrap { display: none; margin-top: 24px; }
-    .result-wrap.visible { display: block; }
-    .result-header {
-      display: flex; align-items: center; justify-content: space-between; gap: 12px;
-      margin-bottom: 12px; flex-wrap: wrap;
-    }
-    .result-title { font-size: .9rem; font-weight: 700; display: flex; align-items: center; gap: 7px; }
-    .result-actions { display: flex; gap: 8px; }
-    .table-wrap {
-      border: 1px solid var(--border); border-radius: var(--radius);
-      overflow: auto; box-shadow: var(--shadow-sm);
-    }
-    table { width: 100%; border-collapse: collapse; font-size: .83rem; }
-    thead { background: var(--bg-subtle); }
-    th {
-      padding: 10px 14px; text-align: left; font-size: .75rem; font-weight: 700;
-      letter-spacing: .04em; color: var(--text-3); text-transform: uppercase;
-      border-bottom: 1px solid var(--border); white-space: nowrap;
-    }
-    td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-2); }
-    tr:last-child td { border-bottom: none; }
-    tbody tr:hover td { background: var(--bg-subtle); }
+    /* Footer */
+    footer{border-top:1px solid var(--border);background:var(--bg-subtle);padding:24px;text-align:center;font-size:.82rem;color:var(--text-3)}
+    footer a{color:var(--accent);text-decoration:none}
+    footer a:hover{text-decoration:underline}
+    .footer-inner{display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap}
+    .footer-dot{opacity:.4}
 
-    /* ─── CSV redirect banner ────────────────────────────── */
-    .csv-banner {
-      margin-top: 16px; background: var(--accent-dim); border: 1px solid var(--accent-mid);
-      border-radius: var(--radius); padding: 14px 18px;
-      display: flex; align-items: center; gap: 14px; font-size: .875rem;
-    }
-    .csv-banner-text { flex: 1; color: var(--text-2); }
-    .csv-banner-text strong { color: var(--text); }
+    /* Toast */
+    .toast{position:fixed;bottom:24px;right:24px;z-index:999;background:var(--text);color:var(--bg);padding:12px 18px;border-radius:9px;font-size:.85rem;font-weight:500;box-shadow:var(--shadow-md);display:none;align-items:center;gap:10px;max-width:320px}
+    .toast.show{display:flex}
 
-    /* ─── Features ───────────────────────────────────────── */
-    .section { padding: 64px 0; }
-    .section-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -.02em; }
-    .section-sub   { color: var(--text-3); font-size: .9rem; margin-bottom: 32px; }
-    .page-sep      { border: none; border-top: 1px solid var(--border); }
-    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
-    .feature-item {
-      background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-lg); padding: 22px 20px;
-    }
-    .feature-icon {
-      width: 38px; height: 38px; border-radius: 9px;
-      background: var(--accent-dim); border: 1px solid var(--accent-mid);
-      display: flex; align-items: center; justify-content: center;
-      color: var(--accent); margin-bottom: 14px;
-    }
-    .feature-name { font-weight: 700; font-size: .95rem; margin-bottom: 5px; }
-    .feature-desc { color: var(--text-3); font-size: .83rem; line-height: 1.55; }
+    /* OCR status badge */
+    .ocr-badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:.75rem;font-weight:600;margin-bottom:12px}
+    .ocr-badge-real{background:#dcfce7;color:#166534}
+    [data-theme="dark"] .ocr-badge-real{background:#14532d;color:#86efac}
 
-    /* ─── Footer ─────────────────────────────────────────── */
-    footer {
-      border-top: 1px solid var(--border); background: var(--bg-subtle);
-      padding: 24px; text-align: center; font-size: .82rem; color: var(--text-3);
-    }
-    footer a { color: var(--accent); text-decoration: none; }
-    footer a:hover { text-decoration: underline; }
-    .footer-inner { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
-    .footer-dot { opacity: .4; }
-
-    /* ─── Toast ──────────────────────────────────────────── */
-    .toast {
-      position: fixed; bottom: 24px; right: 24px; z-index: 999;
-      background: var(--text); color: var(--bg);
-      padding: 12px 18px; border-radius: 9px;
-      font-size: .85rem; font-weight: 500; box-shadow: var(--shadow-md);
-      display: none; align-items: center; gap: 10px; max-width: 320px;
-    }
-    .toast.show { display: flex; }
-
-    @media (max-width: 700px) {
-      .config-row { grid-template-columns: 1fr; }
-      nav .nav-link { display: none; }
-    }
-    @media (max-width: 480px) {
-      .hero { padding: 48px 0 36px; }
-      .modal-backdrop { padding: 12px; }
-    }
+    @media(max-width:700px){.config-row{grid-template-columns:1fr}nav .nav-link{display:none}}
+    @media(max-width:480px){.hero{padding:48px 0 36px}.modal-backdrop{padding:12px}}
   </style>
 </head>
 <body>
 
-<!-- ─── Header ───────────────────────────────────────────── -->
+<!-- Header -->
 <header>
   <div class="header-inner">
     <a class="logo" href="#">
@@ -405,32 +217,22 @@
       </div>
       upravpdf.eu
     </a>
-
     <nav>
       <a class="nav-link" href="#features">Funkce</a>
       <a class="nav-link" href="https://upravcsv.eu" target="_blank" rel="noopener">CSV Cleaner</a>
     </nav>
-
     <div class="header-actions">
-      <!-- Not logged in -->
       <div id="authButtons" style="display:flex;gap:8px;align-items:center;">
         <button class="btn btn-ghost btn-sm" onclick="openModal('login')">Přihlásit se</button>
         <button class="btn btn-primary btn-sm" onclick="openModal('register')">Registrovat</button>
       </div>
-
-      <!-- Logged in -->
       <div class="user-badge" id="userBadge">
         <div class="user-avatar" id="userAvatar">J</div>
         <span id="userLabel">Jan</span>
         <button class="btn-logout" onclick="logout()" title="Odhlásit se">
-          <svg class="icon" style="width:15px;height:15px;" viewBox="0 0 24 24">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
+          <svg class="icon" style="width:15px;height:15px;" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
         </button>
       </div>
-
       <button class="theme-toggle" onclick="toggleTheme()" title="Přepnout režim">
         <svg class="icon" id="themeIcon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
       </button>
@@ -438,7 +240,7 @@
   </div>
 </header>
 
-<!-- ─── Auth Modal ────────────────────────────────────────── -->
+<!-- Auth Modal -->
 <div class="modal-backdrop" id="modalBackdrop" onclick="closeModalOnBackdrop(event)">
   <div class="modal" role="dialog" aria-modal="true">
     <div class="modal-header">
@@ -449,21 +251,18 @@
     </div>
     <div class="modal-body">
       <div class="modal-tabs">
-        <button class="modal-tab active" id="tabLogin"    onclick="switchTab('login')">Přihlásit se</button>
-        <button class="modal-tab"        id="tabRegister" onclick="switchTab('register')">Registrovat</button>
+        <button class="modal-tab active" id="tabLogin" onclick="switchTab('login')">Přihlásit se</button>
+        <button class="modal-tab" id="tabRegister" onclick="switchTab('register')">Registrovat</button>
       </div>
-
-      <!-- Login -->
       <div id="formLogin">
         <div style="display:flex;flex-direction:column;gap:14px;">
           <div class="field-group">
             <label class="field-label" for="loginEmail">E-mailová adresa</label>
-            <input type="email" id="loginEmail" placeholder="vas@email.cz" autocomplete="email" />
+            <input type="email" id="loginEmail" placeholder="vas@email.cz" autocomplete="email"/>
           </div>
           <div class="field-group">
             <label class="field-label" for="loginPass">Heslo</label>
-            <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
-                   onkeydown="if(event.key==='Enter')handleLogin()" />
+            <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password" onkeydown="if(event.key==='Enter')handleLogin()"/>
             <a class="forgot-link" href="#">Zapomenuté heslo?</a>
           </div>
           <button class="btn btn-primary btn-full" onclick="handleLogin()">Přihlásit se</button>
@@ -479,22 +278,19 @@
           </button>
         </div>
       </div>
-
-      <!-- Register -->
       <div id="formRegister" style="display:none;">
         <div style="display:flex;flex-direction:column;gap:14px;">
           <div class="field-group">
             <label class="field-label" for="regName">Celé jméno</label>
-            <input type="text" id="regName" placeholder="Jan Novák" autocomplete="name" />
+            <input type="text" id="regName" placeholder="Jan Novák" autocomplete="name"/>
           </div>
           <div class="field-group">
             <label class="field-label" for="regEmail">E-mailová adresa</label>
-            <input type="email" id="regEmail" placeholder="vas@email.cz" autocomplete="email" />
+            <input type="email" id="regEmail" placeholder="vas@email.cz" autocomplete="email"/>
           </div>
           <div class="field-group">
             <label class="field-label" for="regPass">Heslo</label>
-            <input type="password" id="regPass" placeholder="min. 8 znaků" autocomplete="new-password"
-                   onkeydown="if(event.key==='Enter')handleRegister()" />
+            <input type="password" id="regPass" placeholder="min. 8 znaků" autocomplete="new-password" onkeydown="if(event.key==='Enter')handleRegister()"/>
           </div>
           <button class="btn btn-primary btn-full" onclick="handleRegister()">Vytvořit účet</button>
           <div class="auth-divider">nebo</div>
@@ -513,38 +309,20 @@
   </div>
 </div>
 
-<!-- ─── Hero ─────────────────────────────────────────────── -->
+<!-- Hero -->
 <section class="hero">
   <div class="container-narrow">
-    <div class="hero-label">
-      <span class="hero-label-dot"></span>
-      Automatická extrakce dat
-    </div>
+    <div class="hero-label"><span class="hero-label-dot"></span>Automatická extrakce dat – OCR v prohlížeči</div>
     <h1>Převeď doklady do<br><span class="accent">strukturovaných dat</span></h1>
-    <p class="hero-sub">
-      Nahraj fakturu, dodací list nebo ceník jako PDF, PNG nebo JPG.
-      Systém automaticky rozezná data, přeloží je a připraví CSV soubor k importu.
-    </p>
+    <p class="hero-sub">Nahraj fakturu, dodací list nebo ceník jako PDF, PNG nebo JPG. OCR engine rozezná text přímo v prohlížeči a připraví CSV k importu.</p>
     <div class="hero-chips">
-      <span class="chip">
-        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        PDF, PNG, JPG
-      </span>
-      <span class="chip">
-        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        Čeština, Němčina, Angličtina
-      </span>
-      <span class="chip">
-        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        Export do CSV
-      </span>
-      <span class="chip">
-        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-        PC i mobil
-      </span>
+      <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>PDF, PNG, JPG</span>
+      <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Čeština, Němčina, Angličtina</span>
+      <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Export do CSV</span>
+      <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Zpracování v prohlížeči</span>
     </div>
 
-    <!-- Not logged in: locked state -->
+    <!-- Gate -->
     <div id="uploadGate" class="upload-gate">
       <div class="gate-icon">
         <svg class="icon-xl" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -557,15 +335,15 @@
       </div>
     </div>
 
-    <!-- Logged in: upload area -->
+    <!-- Upload area (logged in) -->
     <div id="uploadArea" style="display:none;">
       <div class="dropzone" id="dropzone">
-        <input type="file" id="fileInput" accept=".pdf,.PDF,.png,.PNG,.jpg,.jpeg,.JPG,.JPEG" />
+        <input type="file" id="fileInput" accept=".pdf,.PDF,.png,.PNG,.jpg,.jpeg,.JPG,.JPEG"/>
         <div class="dz-icon">
           <svg class="icon-xl" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         </div>
         <div class="dz-title">Přetáhni soubor nebo klikni pro výběr</div>
-        <div class="dz-sub">Podporované formáty</div>
+        <div class="dz-sub">Soubor je zpracován lokálně — nikam se neodesílá</div>
         <div class="dz-formats">
           <span class="fmt-tag">PDF</span>
           <span class="fmt-tag">PNG</span>
@@ -574,6 +352,7 @@
         </div>
       </div>
 
+      <!-- Config -->
       <div class="config-panel" id="configPanel">
         <div class="config-file-bar">
           <div class="config-file-icon">
@@ -583,7 +362,7 @@
             <div class="config-file-name" id="fileName">—</div>
             <div class="config-file-meta" id="fileMeta">—</div>
           </div>
-          <button class="config-file-remove" onclick="removeFile()" title="Odebrat soubor">
+          <button class="config-file-remove" onclick="removeFile()" title="Odebrat">
             <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
@@ -592,61 +371,57 @@
             <div class="field-group">
               <label class="field-label" for="srcLang">Jazyk dokumentu</label>
               <select id="srcLang">
-                <option value="auto">Automatická detekce</option>
-                <option value="cs">Čeština</option>
-                <option value="de">Němčina</option>
-                <option value="en">Angličtina</option>
+                <option value="auto">Automatická detekce (CS+DE+EN)</option>
+                <option value="ces">Čeština</option>
+                <option value="deu">Němčina</option>
+                <option value="eng">Angličtina</option>
               </select>
             </div>
             <div class="field-group">
-              <label class="field-label" for="tgtLang">Výstupní jazyk</label>
-              <select id="tgtLang">
-                <option value="cs">Čeština</option>
-                <option value="de">Němčina</option>
-                <option value="en">Angličtina</option>
-              </select>
-            </div>
-          </div>
-          <div class="config-row">
-            <div class="field-group">
-              <label class="field-label" for="docType">Typ dokladu</label>
-              <select id="docType">
-                <option value="auto">Automatická detekce</option>
-                <option value="invoice">Faktura</option>
-                <option value="delivery">Dodací list</option>
-                <option value="pricelist">Ceník</option>
-                <option value="other">Jiný doklad</option>
-              </select>
-            </div>
-            <div class="field-group">
-              <label class="field-label" for="outputFmt">Výstupní formát</label>
+              <label class="field-label" for="outputFmt">Výstupní formát CSV</label>
               <select id="outputFmt">
-                <option value="csv">CSV (středník)</option>
-                <option value="csv-comma">CSV (čárka)</option>
+                <option value="csv">CSV (středník ; )</option>
+                <option value="csv-comma">CSV (čárka , )</option>
                 <option value="tsv">TSV (tabulátor)</option>
               </select>
             </div>
           </div>
-          <button class="btn btn-primary btn-lg btn-full" onclick="runExtraction()">
-            <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            Spustit extrakci dat
+          <div class="field-group">
+            <label class="field-label" for="pdfPage">Strana PDF (pouze pro PDF soubory)</label>
+            <select id="pdfPage">
+              <option value="1">Strana 1</option>
+              <option value="2">Strana 2</option>
+              <option value="3">Strana 3</option>
+              <option value="4">Strana 4</option>
+              <option value="5">Strana 5</option>
+            </select>
+          </div>
+          <button class="btn btn-primary btn-lg btn-full" onclick="runOCR()" id="runBtn">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Spustit OCR extrakci
           </button>
         </div>
         <div class="progress-wrap" id="progressWrap">
           <div class="progress-label">
-            <span>Zpracovávám...</span>
+            <span id="progressLabel">Zpracovávám...</span>
             <span id="progressPct">0 %</span>
           </div>
           <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
-          <div class="progress-status" id="progressStatus">Načítám soubor…</div>
+          <div class="progress-status" id="progressStatus">Inicializuji OCR engine…</div>
         </div>
       </div>
 
+      <!-- Result -->
       <div class="result-wrap" id="resultWrap">
+        <div class="ocr-badge ocr-badge-real">
+          <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+          Skutečná OCR extrakce – Tesseract.js
+        </div>
         <div class="result-header">
           <div class="result-title">
-            <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg class="icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
             Extrahovaná data
+            <span style="font-size:.75rem;font-weight:400;color:var(--text-3)">(buňky lze ručně upravit)</span>
           </div>
           <div class="result-actions">
             <button class="btn btn-secondary btn-sm" onclick="copyCSV()">
@@ -662,20 +437,24 @@
         <div class="table-wrap">
           <table><thead><tr id="resultHead"></tr></thead><tbody id="resultBody"></tbody></table>
         </div>
-        <div class="csv-banner">
+
+        <!-- Raw OCR text toggle -->
+        <div class="ocr-raw-box" id="rawBox">
+          <div class="ocr-raw-header" onclick="toggleRaw()">
+            <span>Zobrazit surový OCR text</span>
+            <svg class="icon" id="rawChevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+          </div>
+          <div class="ocr-raw-content" id="rawContent"></div>
+        </div>
+
+        <div class="csv-banner" style="margin-top:16px;">
           <svg class="icon icon-lg" style="color:var(--accent);flex-shrink:0;" viewBox="0 0 24 24">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
           </svg>
-          <div class="csv-banner-text">
-            Chceš CSV dále upravit?
-            <strong> Přejdi na upravcsv.eu</strong> – sesterský nástroj pro čištění a úpravy CSV dat.
-          </div>
+          <div class="csv-banner-text">Chceš CSV dále upravit? <strong>Přejdi na upravcsv.eu</strong> – sesterský nástroj pro čištění a úpravy CSV dat.</div>
           <a class="btn btn-primary btn-sm" href="https://upravcsv.eu" target="_blank" rel="noopener">
-            Otevřít
-            <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24">
-              <line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/>
-            </svg>
+            Otevřít <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
           </a>
         </div>
       </div>
@@ -683,61 +462,48 @@
   </div>
 </section>
 
-<hr class="page-sep" />
+<hr class="page-sep"/>
 
-<!-- ─── Features ─────────────────────────────────────────── -->
+<!-- Features -->
 <section class="section" id="features">
   <div class="container">
     <div class="section-title">Co umí upravpdf.eu</div>
     <div class="section-sub">Navrženo pro firmy a autoservisy pracující s dodavatelskými doklady</div>
     <div class="features-grid">
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </div>
-        <div class="feature-name">OCR rozpoznání</div>
-        <div class="feature-desc">Automatická extrakce textu z PDF, fotografií a skenů dokladů bez manuálního opisování.</div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <div class="feature-name">OCR v prohlížeči</div>
+        <div class="feature-desc">Tesseract.js rozezná text z PDF, fotografií a skenů přímo v prohlížeči. Soubor nikam neopouští tvůj počítač.</div>
       </div>
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        </div>
-        <div class="feature-name">Překlad jazyků</div>
-        <div class="feature-desc">Překlad obsahu dokladů mezi češtinou, němčinou a angličtinou. Do budoucna plánováno rozšíření.</div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+        <div class="feature-name">Vícejazyčné rozpoznání</div>
+        <div class="feature-desc">Čeština, němčina, angličtina – nebo detekce automaticky. Do budoucna plánováno rozšíření o další jazyky.</div>
       </div>
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        </div>
-        <div class="feature-name">CSV výstup</div>
-        <div class="feature-desc">Data jsou exportována do přehledného CSV souboru připraveného k importu do ERP nebo skladu.</div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+        <div class="feature-name">Editovatelný CSV výstup</div>
+        <div class="feature-desc">Data se zobrazí jako tabulka kterou lze ručně opravit přímo v prohlížeči, pak stáhnout jako CSV.</div>
       </div>
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
-        </div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg></div>
         <div class="feature-name">Mobilní přístup</div>
-        <div class="feature-desc">Funguje v mobilním prohlížeči. Ofoť doklad telefonem a stáhni CSV přímo do mobilu.</div>
+        <div class="feature-desc">Ofoť doklad telefonem a nahraj jako JPG. OCR ho zpracuje přímo v mobilním prohlížeči.</div>
       </div>
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-        </div>
-        <div class="feature-name">Soukromí a bezpečnost</div>
-        <div class="feature-desc">Data jsou zpracovávána přes šifrované spojení. Soubory nejsou ukládány bez souhlasu uživatele.</div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="feature-name">Soukromí</div>
+        <div class="feature-desc">Soubor se zpracovává lokálně v prohlížeči. Bez backendu, bez uploadu na server, bez ukládání dat.</div>
       </div>
       <div class="feature-item">
-        <div class="feature-icon">
-          <svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-        </div>
+        <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
         <div class="feature-name">Propojení s CSV Cleaner</div>
-        <div class="feature-desc">Výsledný CSV soubor lze rovnou otevřít v upravcsv.eu pro další čištění, filtraci a úpravy.</div>
+        <div class="feature-desc">Výsledný CSV soubor lze otevřít v upravcsv.eu pro další čištění, filtraci a úpravy dat.</div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ─── Footer ────────────────────────────────────────────── -->
 <footer>
   <div class="footer-inner">
     <span>© 2024 upravpdf.eu</span>
@@ -756,225 +522,281 @@
 </div>
 
 <script>
+/* ── PDF.js worker ──────────────────────────────────────── */
+if (typeof pdfjsLib !== 'undefined') {
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+
 /* ── Theme ─────────────────────────────────────────────── */
 const html = document.documentElement;
 const MOON = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
 const SUN  = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
-function setTheme(t) {
-  html.setAttribute('data-theme', t);
-  document.getElementById('themeIcon').innerHTML = t === 'dark' ? SUN : MOON;
-  try { localStorage.setItem('pdftool-theme', t); } catch(e){}
-}
-function toggleTheme() { setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
-try { const s = localStorage.getItem('pdftool-theme'); if (s) setTheme(s); } catch(e){}
+function setTheme(t){html.setAttribute('data-theme',t);document.getElementById('themeIcon').innerHTML=t==='dark'?SUN:MOON;try{localStorage.setItem('pdftool-theme',t);}catch(e){}}
+function toggleTheme(){setTheme(html.getAttribute('data-theme')==='dark'?'light':'dark');}
+try{const s=localStorage.getItem('pdftool-theme');if(s)setTheme(s);}catch(e){}
 
 /* ── Auth ──────────────────────────────────────────────── */
-let currentUser = null;
-try { const u = localStorage.getItem('pdftool-user'); if (u) currentUser = JSON.parse(u); } catch(e){}
-
-function applyAuthState() {
-  const ok = !!currentUser;
-  document.getElementById('authButtons').style.display = ok ? 'none' : 'flex';
-  const badge = document.getElementById('userBadge');
-  badge.classList.toggle('visible', ok);
-  if (ok) {
-    const name = currentUser.name || currentUser.email.split('@')[0];
-    document.getElementById('userLabel').textContent = name.split(' ')[0];
-    document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+let currentUser=null;
+try{const u=localStorage.getItem('pdftool-user');if(u)currentUser=JSON.parse(u);}catch(e){}
+function applyAuthState(){
+  const ok=!!currentUser;
+  document.getElementById('authButtons').style.display=ok?'none':'flex';
+  document.getElementById('userBadge').classList.toggle('visible',ok);
+  if(ok){
+    const name=currentUser.name||currentUser.email.split('@')[0];
+    document.getElementById('userLabel').textContent=name.split(' ')[0];
+    document.getElementById('userAvatar').textContent=name[0].toUpperCase();
   }
-  document.getElementById('uploadGate').style.display = ok ? 'none' : 'block';
-  document.getElementById('uploadArea').style.display = ok ? 'block' : 'none';
+  document.getElementById('uploadGate').style.display=ok?'none':'block';
+  document.getElementById('uploadArea').style.display=ok?'block':'none';
 }
 applyAuthState();
-
-function logout() {
-  currentUser = null;
-  try { localStorage.removeItem('pdftool-user'); } catch(e){}
-  applyAuthState(); removeFile();
-  showToast('Byl/a jsi odhlášen/a.');
-}
+function logout(){currentUser=null;try{localStorage.removeItem('pdftool-user');}catch(e){}applyAuthState();removeFile();showToast('Byl/a jsi odhlášen/a.');}
 
 /* ── Modal ──────────────────────────────────────────────── */
-function openModal(tab) {
-  document.getElementById('modalBackdrop').classList.add('open');
-  switchTab(tab || 'login');
-  setTimeout(() => {
-    const el = tab === 'register'
-      ? document.getElementById('regName')
-      : document.getElementById('loginEmail');
-    if (el) el.focus();
-  }, 120);
+function openModal(tab){document.getElementById('modalBackdrop').classList.add('open');switchTab(tab||'login');setTimeout(()=>{const el=tab==='register'?document.getElementById('regName'):document.getElementById('loginEmail');if(el)el.focus();},120);}
+function closeModal(){document.getElementById('modalBackdrop').classList.remove('open');}
+function closeModalOnBackdrop(e){if(e.target===document.getElementById('modalBackdrop'))closeModal();}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+function switchTab(tab){
+  const login=tab==='login';
+  document.getElementById('formLogin').style.display=login?'':'none';
+  document.getElementById('formRegister').style.display=login?'none':'';
+  document.getElementById('tabLogin').classList.toggle('active',login);
+  document.getElementById('tabRegister').classList.toggle('active',!login);
+  document.getElementById('modalTitle').textContent=login?'Přihlásit se':'Vytvořit účet';
 }
-function closeModal() { document.getElementById('modalBackdrop').classList.remove('open'); }
-function closeModalOnBackdrop(e) { if (e.target === document.getElementById('modalBackdrop')) closeModal(); }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
-
-function switchTab(tab) {
-  const login = tab === 'login';
-  document.getElementById('formLogin').style.display    = login ? '' : 'none';
-  document.getElementById('formRegister').style.display = login ? 'none' : '';
-  document.getElementById('tabLogin').classList.toggle('active', login);
-  document.getElementById('tabRegister').classList.toggle('active', !login);
-  document.getElementById('modalTitle').textContent = login ? 'Přihlásit se' : 'Vytvořit účet';
+function handleLogin(){
+  const email=document.getElementById('loginEmail').value.trim();
+  const pass=document.getElementById('loginPass').value;
+  if(!email||!pass){showToast('Vyplň e-mail a heslo.');return;}
+  if(!email.includes('@')){showToast('Zadej platný e-mail.');return;}
+  currentUser={email,name:email.split('@')[0]};
+  try{localStorage.setItem('pdftool-user',JSON.stringify(currentUser));}catch(e){}
+  closeModal();applyAuthState();showToast('Přihlášení proběhlo úspěšně.');
 }
-
-function handleLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass  = document.getElementById('loginPass').value;
-  if (!email || !pass) { showToast('Vyplň e-mail a heslo.'); return; }
-  if (!email.includes('@')) { showToast('Zadej platný e-mail.'); return; }
-  currentUser = { email, name: email.split('@')[0] };
-  try { localStorage.setItem('pdftool-user', JSON.stringify(currentUser)); } catch(e){}
-  closeModal(); applyAuthState();
-  showToast('Přihlášení proběhlo úspěšně.');
+function handleRegister(){
+  const name=document.getElementById('regName').value.trim();
+  const email=document.getElementById('regEmail').value.trim();
+  const pass=document.getElementById('regPass').value;
+  if(!name||!email||!pass){showToast('Vyplň všechna pole.');return;}
+  if(!email.includes('@')){showToast('Zadej platný e-mail.');return;}
+  if(pass.length<8){showToast('Heslo musí mít alespoň 8 znaků.');return;}
+  currentUser={email,name};
+  try{localStorage.setItem('pdftool-user',JSON.stringify(currentUser));}catch(e){}
+  closeModal();applyAuthState();showToast('Účet byl vytvořen. Vítej, '+name.split(' ')[0]+'!');
 }
-
-function handleRegister() {
-  const name  = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const pass  = document.getElementById('regPass').value;
-  if (!name || !email || !pass) { showToast('Vyplň všechna pole.'); return; }
-  if (!email.includes('@')) { showToast('Zadej platný e-mail.'); return; }
-  if (pass.length < 8) { showToast('Heslo musí mít alespoň 8 znaků.'); return; }
-  currentUser = { email, name };
-  try { localStorage.setItem('pdftool-user', JSON.stringify(currentUser)); } catch(e){}
-  closeModal(); applyAuthState();
-  showToast('Účet byl vytvořen. Vítej, ' + name.split(' ')[0] + '!');
-}
-
-function handleGoogleAuth() { showToast('Google přihlášení bude dostupné po spuštění backendu.'); }
+function handleGoogleAuth(){showToast('Google přihlášení bude dostupné po spuštění backendu.');}
 
 /* ── File handling ──────────────────────────────────────── */
-let currentFile = null, extractedData = null;
-const dropzone  = document.getElementById('dropzone');
-const fileInput = document.getElementById('fileInput');
+let currentFile=null, rawOCRText='', tableData=[];
+const dropzone=document.getElementById('dropzone');
+const fileInput=document.getElementById('fileInput');
+dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('over');});
+dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('over'));
+dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('over');const f=e.dataTransfer.files[0];if(f)loadFile(f);});
+fileInput.addEventListener('change',()=>{if(fileInput.files[0])loadFile(fileInput.files[0]);});
 
-dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('over'); });
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
-dropzone.addEventListener('drop', e => {
-  e.preventDefault(); dropzone.classList.remove('over');
-  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
-});
-fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
-
-function loadFile(f) {
-  const ext = f.name.split('.').pop().toLowerCase();
-  if (!['pdf','png','jpg','jpeg'].includes(ext)) { showToast('Nepodporovaný formát. Použij PDF, PNG nebo JPG.'); return; }
-  if (f.size > 20*1024*1024) { showToast('Soubor je příliš velký (max. 20 MB).'); return; }
-  currentFile = f;
-  document.getElementById('fileName').textContent = f.name;
-  document.getElementById('fileMeta').textContent  = formatSize(f.size) + ' · ' + ext.toUpperCase();
+function loadFile(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(!['pdf','png','jpg','jpeg'].includes(ext)){showToast('Nepodporovaný formát. Použij PDF, PNG nebo JPG.');return;}
+  if(f.size>20*1024*1024){showToast('Soubor je příliš velký (max. 20 MB).');return;}
+  currentFile=f;
+  document.getElementById('fileName').textContent=f.name;
+  document.getElementById('fileMeta').textContent=formatSize(f.size)+' · '+ext.toUpperCase();
+  // Show/hide PDF page selector
+  document.getElementById('pdfPage').parentElement.style.display=ext==='pdf'?'flex':'none';
   document.getElementById('configPanel').classList.add('visible');
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('resultWrap').classList.remove('visible');
-  extractedData = null;
+  tableData=[];rawOCRText='';
 }
-function removeFile() {
-  currentFile = null; extractedData = null;
-  if (fileInput) fileInput.value = '';
+function removeFile(){
+  currentFile=null;tableData=[];rawOCRText='';
+  if(fileInput)fileInput.value='';
   document.getElementById('configPanel').classList.remove('visible');
   document.getElementById('resultWrap').classList.remove('visible');
 }
-function formatSize(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
-  return (b/1048576).toFixed(1) + ' MB';
-}
+function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFixed(1)+' KB';return(b/1048576).toFixed(1)+' MB';}
 
-/* ── Extraction (demo) ──────────────────────────────────── */
-function runExtraction() {
-  if (!currentFile) return;
-  const fill   = document.getElementById('progressFill');
-  const pct    = document.getElementById('progressPct');
-  const status = document.getElementById('progressStatus');
-  document.getElementById('progressWrap').classList.add('visible');
+/* ── OCR engine ─────────────────────────────────────────── */
+async function runOCR(){
+  if(!currentFile)return;
+  const btn=document.getElementById('runBtn');
+  btn.disabled=true;
+  btn.textContent='Zpracovávám…';
+
+  const pw=document.getElementById('progressWrap');
+  const fill=document.getElementById('progressFill');
+  const pct=document.getElementById('progressPct');
+  const status=document.getElementById('progressStatus');
+  pw.classList.add('visible');
   document.getElementById('resultWrap').classList.remove('visible');
 
-  const steps = [
-    [10,'Načítám soubor…'],[30,'Rozpoznávám text (OCR)…'],
-    [55,'Detekuji strukturu dokladu…'],[75,'Překládám obsah…'],
-    [92,'Sestavuji CSV výstup…'],[100,'Hotovo'],
-  ];
-  let i = 0;
-  const iv = setInterval(() => {
-    if (i >= steps.length) { clearInterval(iv); showResult(); return; }
-    const [p, lbl] = steps[i++];
-    fill.style.width = p + '%'; pct.textContent = p + ' %'; status.textContent = lbl;
-  }, 500);
-}
+  setProgress(fill,pct,status,5,'Připravuji soubor…');
 
-function showResult() {
-  const tgt = document.getElementById('tgtLang').value;
-  const doc = document.getElementById('docType').value;
-  let headers, rows;
+  try {
+    let imageSource;
+    const ext=currentFile.name.split('.').pop().toLowerCase();
 
-  if (doc === 'pricelist') {
-    headers = tgt==='de' ? ['Artikelnummer','Bezeichnung','Preis (EUR)','MwSt.','Lager']
-            : tgt==='en' ? ['Part number','Description','Price (EUR)','VAT','Stock']
-            :               ['Číslo dílu','Popis','Cena (EUR)','DPH','Sklad'];
-    rows = [
-      ['1023-AF','Vzduchový filtr MANN C30130','4,90','21 %','Ano'],
-      ['2041-OF','Olejový filtr MANN W712/83','3,60','21 %','Ano'],
-      ['3088-BL','Brzdová kapalina DOT 4 – 1L','6,20','21 %','Ano'],
-      ['4120-SK','Sada spojky SACHS 3000970005','189,00','21 %','Objednat'],
-    ];
-  } else if (doc === 'delivery') {
-    headers = tgt==='de' ? ['Pos.','Artikelnummer','Bezeichnung','Menge','Einheit']
-            : tgt==='en' ? ['Pos.','Part No.','Description','Qty','Unit']
-            :               ['Pos.','Číslo dílu','Popis','Množství','Jednotka'];
-    rows = [
-      ['1','1023-AF','Vzduchový filtr MANN C30130','5','ks'],
-      ['2','2041-OF','Olejový filtr MANN W712/83','10','ks'],
-      ['3','3088-BL','Brzdová kapalina DOT 4 – 1L','3','ks'],
-    ];
-  } else {
-    headers = tgt==='de' ? ['Pos.','Bezeichnung','Menge','E-Preis','Gesamt','MwSt.']
-            : tgt==='en' ? ['Pos.','Description','Qty','Unit price','Total','VAT']
-            :               ['Pos.','Popis','Množství','Jedn. cena','Celkem','DPH'];
-    rows = [
-      ['1','Vzduchový filtr MANN C30130','5','4,90 EUR','24,50 EUR','21 %'],
-      ['2','Olejový filtr MANN W712/83','10','3,60 EUR','36,00 EUR','21 %'],
-      ['3','Brzdová kapalina DOT 4 – 1L','3','6,20 EUR','18,60 EUR','21 %'],
-      ['','','','Mezisoučet','79,10 EUR',''],
-      ['','','','DPH 21 %','16,61 EUR',''],
-      ['','','','Celkem','95,71 EUR',''],
-    ];
+    if(ext==='pdf'){
+      setProgress(fill,pct,status,15,'Načítám PDF…');
+      imageSource=await pdfToCanvas(currentFile, parseInt(document.getElementById('pdfPage').value)||1);
+      setProgress(fill,pct,status,30,'PDF převedeno na obraz…');
+    } else {
+      imageSource=currentFile;
+      setProgress(fill,pct,status,20,'Obraz načten…');
+    }
+
+    const lang=document.getElementById('srcLang').value;
+    const langCode=lang==='auto'?'ces+deu+eng':lang;
+
+    setProgress(fill,pct,status,35,'Spouštím OCR engine (Tesseract.js)…');
+
+    const result = await Tesseract.recognize(imageSource, langCode, {
+      logger: m => {
+        if(m.status==='recognizing text'){
+          const p=35+Math.round(m.progress*55);
+          setProgress(fill,pct,status,p,'Rozpoznávám text… '+Math.round(m.progress*100)+' %');
+        }
+      }
+    });
+
+    rawOCRText=result.data.text;
+    setProgress(fill,pct,status,95,'Strukturuji data…');
+    tableData=parseOCRToTable(rawOCRText);
+    setProgress(fill,pct,status,100,'Hotovo');
+    renderResult();
+
+  } catch(err){
+    console.error(err);
+    showToast('Chyba OCR: '+err.message);
+    setProgress(fill,pct,status,0,'Chyba');
   }
-  extractedData = { headers, rows };
-  document.getElementById('resultHead').innerHTML = headers.map(h=>`<th>${h}</th>`).join('');
-  document.getElementById('resultBody').innerHTML = rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
-  document.getElementById('resultWrap').classList.add('visible');
-  document.getElementById('resultWrap').scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+  btn.disabled=false;
+  btn.innerHTML='<svg class="icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Spustit OCR znovu';
 }
 
-/* ── CSV export ────────────────────────────────────────── */
-function buildCSV() {
-  if (!extractedData) return '';
-  const sep = {'csv':';','csv-comma':',','tsv':'\t'}[document.getElementById('outputFmt').value] || ';';
-  return [extractedData.headers, ...extractedData.rows]
-    .map(r => r.map(c=>`"${c.replace(/"/g,'""')}"`).join(sep)).join('\r\n');
+function setProgress(fill,pct,status,p,txt){
+  fill.style.width=p+'%';
+  pct.textContent=p+' %';
+  status.textContent=txt;
 }
-function downloadCSV() {
-  const csv = buildCSV(); if (!csv) return;
-  const a = Object.assign(document.createElement('a'), {
-    href: URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'})),
-    download: (currentFile ? currentFile.name.replace(/\.[^.]+$/,'') : 'doklad') + '_export.csv',
+
+/* ── PDF → Canvas ───────────────────────────────────────── */
+async function pdfToCanvas(file, pageNum){
+  const arrayBuffer=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+  const page=await pdf.getPage(Math.min(pageNum, pdf.numPages));
+  const scale=2.0; // higher = better OCR quality
+  const viewport=page.getViewport({scale});
+  const canvas=document.createElement('canvas');
+  canvas.width=viewport.width;
+  canvas.height=viewport.height;
+  const ctx=canvas.getContext('2d');
+  await page.render({canvasContext:ctx,viewport}).promise;
+  return canvas;
+}
+
+/* ── Parse OCR text → table rows ───────────────────────── */
+function parseOCRToTable(text){
+  const lines=text.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim().length>1);
+  if(!lines.length)return[['Řádek','Obsah'],[['1','(žádný text nebyl rozpoznán)']]];
+
+  // Detect if table-like (lines with consistent column separation by 2+ spaces)
+  const splitLines=lines.map(l=>splitColumns(l));
+  const colCounts=splitLines.map(c=>c.length);
+  const maxCols=Math.max(...colCounts);
+  const avgCols=colCounts.reduce((a,b)=>a+b,0)/colCounts.length;
+
+  let headers, rows;
+  if(maxCols>=2 && avgCols>=1.5){
+    // Table-like structure
+    headers=splitLines[0].length>=2?splitLines[0]:generateHeaders(maxCols);
+    const dataStart=splitLines[0].length>=2?1:0;
+    rows=splitLines.slice(dataStart).map(cols=>{
+      while(cols.length<maxCols)cols.push('');
+      return cols.slice(0,maxCols);
+    });
+    if(dataStart===0){
+      headers=generateHeaders(maxCols);
+      rows=splitLines;
+    }
+  } else {
+    // Single column fallback
+    headers=['#','Text'];
+    rows=lines.map((l,i)=>[(i+1).toString(),l.trim()]);
+  }
+  return{headers, rows};
+}
+
+function splitColumns(line){
+  // Split by 2+ spaces or tab characters
+  return line.split(/\t|\s{2,}/).map(c=>c.trim()).filter(c=>c.length>0);
+}
+
+function generateHeaders(n){
+  const names=['Sloupec A','Sloupec B','Sloupec C','Sloupec D','Sloupec E','Sloupec F'];
+  return Array.from({length:n},(_,i)=>names[i]||('Sl. '+(i+1)));
+}
+
+/* ── Render table ───────────────────────────────────────── */
+function renderResult(){
+  const {headers,rows}=tableData;
+  document.getElementById('resultHead').innerHTML=headers.map(h=>`<th>${escH(h)}</th>`).join('');
+  document.getElementById('resultBody').innerHTML=rows.map((r,ri)=>
+    `<tr>${r.map((c,ci)=>`<td contenteditable="true" class="editable-cell" data-r="${ri}" data-c="${ci}" onblur="cellEdit(this)">${escH(c)}</td>`).join('')}</tr>`
+  ).join('');
+  document.getElementById('rawContent').textContent=rawOCRText;
+  document.getElementById('resultWrap').classList.add('visible');
+  document.getElementById('resultWrap').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function cellEdit(el){
+  const r=+el.dataset.r, c=+el.dataset.c;
+  tableData.rows[r][c]=el.textContent;
+}
+
+function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+/* ── Raw OCR toggle ─────────────────────────────────────── */
+function toggleRaw(){
+  const c=document.getElementById('rawContent');
+  const ch=document.getElementById('rawChevron');
+  c.classList.toggle('open');
+  ch.style.transform=c.classList.contains('open')?'rotate(180deg)':'';
+}
+
+/* ── CSV export ─────────────────────────────────────────── */
+function buildCSV(){
+  if(!tableData||!tableData.headers)return'';
+  const sep={'csv':';','csv-comma':',','tsv':'\t'}[document.getElementById('outputFmt').value]||';';
+  return[tableData.headers,...tableData.rows]
+    .map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(sep))
+    .join('\r\n');
+}
+function downloadCSV(){
+  const csv=buildCSV();if(!csv)return;
+  const a=Object.assign(document.createElement('a'),{
+    href:URL.createObjectURL(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'})),
+    download:(currentFile?currentFile.name.replace(/\.[^.]+$/,''):'doklad')+'_ocr.csv',
   });
-  a.click(); URL.revokeObjectURL(a.href);
+  a.click();URL.revokeObjectURL(a.href);
   showToast('CSV soubor byl stažen.');
 }
-function copyCSV() {
-  navigator.clipboard.writeText(buildCSV()).then(() => showToast('CSV zkopírováno do schránky.'));
+function copyCSV(){
+  navigator.clipboard.writeText(buildCSV()).then(()=>showToast('CSV zkopírováno do schránky.'));
 }
 
 /* ── Toast ─────────────────────────────────────────────── */
 let toastTimer;
-function showToast(msg) {
-  const t = document.getElementById('toast');
-  document.getElementById('toastMsg').textContent = msg;
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
+function showToast(msg){
+  const t=document.getElementById('toast');
+  document.getElementById('toastMsg').textContent=msg;
+  t.classList.add('show');clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3400);
 }
 </script>
 </body>
