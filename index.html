@@ -1,27 +1,981 @@
 <!DOCTYPE html>
-<html lang="cs">
+<html lang="cs" data-theme="light">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PDF Cleaner</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>upravpdf.eu – Extrakce dat z dokladů</title>
+  <style>
+    /* ─── Design tokens ──────────────────────────────────── */
+    :root {
+      --bg:          #ffffff;
+      --bg-subtle:   #f7f8fa;
+      --bg-input:    #f2f4f7;
+      --surface:     #ffffff;
+      --border:      #e4e7ec;
+      --border-mid:  #d0d5dd;
+      --text:        #101828;
+      --text-2:      #344054;
+      --text-3:      #667085;
+      --accent:      #2563eb;
+      --accent-dim:  #eff6ff;
+      --accent-mid:  #bfdbfe;
+      --accent-dark: #1d4ed8;
+      --success:     #12b76a;
+      --danger:      #f04438;
+      --shadow-sm:   0 1px 3px rgba(16,24,40,.08), 0 1px 2px rgba(16,24,40,.06);
+      --shadow-md:   0 8px 32px rgba(16,24,40,.14), 0 2px 8px rgba(16,24,40,.08);
+      --shadow-overlay: 0 20px 60px rgba(16,24,40,.22);
+      --radius:      10px;
+      --radius-lg:   14px;
+    }
+    [data-theme="dark"] {
+      --bg:          #0d0f14;
+      --bg-subtle:   #131720;
+      --bg-input:    #1c2030;
+      --surface:     #171b27;
+      --border:      #262d40;
+      --border-mid:  #323a52;
+      --text:        #f2f4f7;
+      --text-2:      #d0d5dd;
+      --text-3:      #8592ad;
+      --accent:      #60a5fa;
+      --accent-dim:  #172038;
+      --accent-mid:  #1e3a5f;
+      --accent-dark: #93c5fd;
+      --shadow-sm:   0 1px 3px rgba(0,0,0,.3);
+      --shadow-md:   0 8px 32px rgba(0,0,0,.5);
+      --shadow-overlay: 0 20px 60px rgba(0,0,0,.7);
+    }
 
-  <link rel="stylesheet" href="style.css">
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+      font-size: 15px; line-height: 1.6;
+      background: var(--bg); color: var(--text);
+      transition: background .25s, color .25s; min-height: 100vh;
+    }
+
+    .icon { display: inline-block; width: 18px; height: 18px; stroke: currentColor; fill: none;
+            stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; flex-shrink: 0; }
+    .icon-lg { width: 22px; height: 22px; }
+    .icon-xl { width: 32px; height: 32px; stroke-width: 1.5; }
+
+    .container        { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    .container-narrow { max-width: 640px;  margin: 0 auto; padding: 0 24px; }
+
+    /* ─── Header ─────────────────────────────────────────── */
+    header {
+      position: sticky; top: 0; z-index: 200;
+      background: var(--bg); border-bottom: 1px solid var(--border);
+      height: 60px; display: flex; align-items: center;
+    }
+    .header-inner {
+      width: 100%; max-width: 1080px; margin: 0 auto; padding: 0 24px;
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .logo {
+      display: flex; align-items: center; gap: 9px;
+      text-decoration: none; color: var(--text);
+      font-weight: 700; font-size: 1.05rem; letter-spacing: -.02em;
+    }
+    .logo-mark {
+      width: 30px; height: 30px; background: var(--accent);
+      border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff;
+    }
+    nav { display: flex; align-items: center; gap: 4px; }
+    .nav-link {
+      padding: 6px 12px; border-radius: 7px; font-size: .875rem; font-weight: 500;
+      color: var(--text-3); text-decoration: none;
+      transition: color .15s, background .15s; cursor: pointer; background: none; border: none;
+    }
+    .nav-link:hover { color: var(--text); background: var(--bg-subtle); }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+
+    /* ─── Buttons ─────────────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      padding: 9px 18px; border-radius: 8px; font-size: .875rem; font-weight: 600;
+      cursor: pointer; transition: all .18s; border: 1px solid transparent;
+      text-decoration: none; white-space: nowrap;
+    }
+    .btn-primary  { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .btn-primary:hover { background: var(--accent-dark); border-color: var(--accent-dark); }
+    .btn-secondary { background: var(--surface); color: var(--text-2); border-color: var(--border-mid); }
+    .btn-secondary:hover { background: var(--bg-subtle); }
+    .btn-ghost { background: none; color: var(--text-3); border-color: transparent; }
+    .btn-ghost:hover { background: var(--bg-subtle); color: var(--text); }
+    .btn-sm   { padding: 6px 13px; font-size: .82rem; }
+    .btn-lg   { padding: 12px 28px; font-size: .95rem; }
+    .btn-full { width: 100%; }
+    .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+    .btn-success:hover { opacity: .88; }
+
+    /* ─── Theme toggle ───────────────────────────────────── */
+    .theme-toggle {
+      width: 36px; height: 36px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg-subtle);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+      color: var(--text-3); transition: all .18s;
+    }
+    .theme-toggle:hover { color: var(--text); background: var(--bg-input); }
+
+    /* ─── User badge ─────────────────────────────────────── */
+    .user-badge {
+      display: none; align-items: center; gap: 8px;
+      padding: 5px 10px 5px 5px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--bg-subtle);
+      font-size: .82rem; font-weight: 600; color: var(--text-2);
+    }
+    .user-badge.visible { display: flex; }
+    .user-avatar {
+      width: 26px; height: 26px; border-radius: 6px;
+      background: var(--accent); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; flex-shrink: 0;
+    }
+    .btn-logout {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-3); padding: 2px 4px; border-radius: 4px;
+      display: flex; align-items: center; transition: color .15s;
+    }
+    .btn-logout:hover { color: var(--danger); }
+
+    /* ─── Modal ──────────────────────────────────────────── */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; z-index: 500;
+      background: rgba(0,0,0,.52);
+      align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); width: 100%; max-width: 420px;
+      box-shadow: var(--shadow-overlay); overflow: hidden;
+      animation: modalIn .2s ease;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(-12px) scale(.97); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 20px 24px 0;
+    }
+    .modal-title { font-size: 1.05rem; font-weight: 700; }
+    .modal-close {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-3); padding: 4px; border-radius: 5px;
+      display: flex; align-items: center; transition: color .15s;
+    }
+    .modal-close:hover { color: var(--text); }
+    .modal-body { padding: 20px 24px 28px; display: flex; flex-direction: column; gap: 14px; }
+
+    .modal-tabs {
+      display: flex; background: var(--bg-input);
+      border-radius: 8px; padding: 3px; gap: 2px;
+    }
+    .modal-tab {
+      flex: 1; padding: 7px; border-radius: 6px;
+      font-size: .84rem; font-weight: 600; cursor: pointer;
+      border: none; background: none; color: var(--text-3); transition: all .18s;
+    }
+    .modal-tab.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+
+    /* ─── Form elements ──────────────────────────────────── */
+    .field-group { display: flex; flex-direction: column; gap: 6px; }
+    .field-label { font-size: .82rem; font-weight: 600; color: var(--text-2); }
+    input[type="text"], input[type="email"], input[type="password"], select {
+      background: var(--bg-input); border: 1px solid var(--border);
+      border-radius: 8px; color: var(--text); font-size: .875rem;
+      padding: 9px 12px; width: 100%; outline: none; transition: border-color .18s;
+    }
+    select {
+      appearance: none; -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+    input::placeholder { color: var(--text-3); }
+    .forgot-link {
+      font-size: .8rem; color: var(--accent); text-decoration: none;
+      text-align: right; display: block; margin-top: -4px;
+    }
+    .forgot-link:hover { text-decoration: underline; }
+    .auth-divider {
+      display: flex; align-items: center; gap: 10px;
+      color: var(--text-3); font-size: .8rem;
+    }
+    .auth-divider::before, .auth-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+    /* ─── Hero ───────────────────────────────────────────── */
+    .hero { padding: 72px 0 56px; text-align: center; }
+    .hero-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .78rem; font-weight: 600; color: var(--accent);
+      letter-spacing: .06em; text-transform: uppercase; margin-bottom: 20px;
+    }
+    .hero-label-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+    h1 {
+      font-size: clamp(1.9rem, 4vw, 2.75rem);
+      font-weight: 800; letter-spacing: -.03em; line-height: 1.18;
+      color: var(--text); margin-bottom: 18px;
+    }
+    h1 .accent { color: var(--accent); }
+    .hero-sub {
+      color: var(--text-3); font-size: 1.05rem;
+      max-width: 520px; margin: 0 auto 36px; line-height: 1.65;
+    }
+    .hero-chips {
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; flex-wrap: wrap; margin-bottom: 48px;
+    }
+    .chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 12px; background: var(--bg-subtle);
+      border: 1px solid var(--border); border-radius: 20px;
+      font-size: .8rem; color: var(--text-2); font-weight: 500;
+    }
+
+    /* ─── Upload gate ────────────────────────────────────── */
+    .upload-gate {
+      background: var(--bg-subtle); border: 2px dashed var(--border-mid);
+      border-radius: var(--radius-lg); padding: 52px 32px 48px; text-align: center;
+    }
+    .gate-icon {
+      width: 52px; height: 52px; border-radius: 12px;
+      background: var(--bg-input); border: 1px solid var(--border-mid);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-3); margin: 0 auto 20px;
+    }
+    .gate-title { font-size: 1rem; font-weight: 600; margin-bottom: 8px; }
+    .gate-sub   { color: var(--text-3); font-size: .875rem; margin-bottom: 24px; }
+    .gate-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+
+    /* ─── Dropzone ───────────────────────────────────────── */
+    .dropzone {
+      background: var(--bg-subtle); border: 2px dashed var(--border-mid);
+      border-radius: var(--radius-lg); padding: 52px 32px 44px;
+      text-align: center; cursor: pointer;
+      transition: border-color .2s, background .2s; position: relative;
+    }
+    .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--accent-dim); }
+    .dropzone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .dz-icon {
+      width: 52px; height: 52px; border-radius: 12px;
+      background: var(--accent-dim); border: 1px solid var(--accent-mid);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); margin: 0 auto 20px;
+    }
+    .dz-title { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .dz-sub   { color: var(--text-3); font-size: .875rem; margin-bottom: 22px; }
+    .dz-formats { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .fmt-tag {
+      padding: 3px 9px; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 5px; font-size: .75rem; font-weight: 600; color: var(--text-3); letter-spacing: .04em;
+    }
+
+    /* ─── Config panel ───────────────────────────────────── */
+    .config-panel {
+      display: none; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      overflow: hidden; box-shadow: var(--shadow-sm); margin-top: 16px;
+    }
+    .config-panel.visible { display: block; }
+    .config-file-bar {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; border-bottom: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .config-file-icon {
+      width: 36px; height: 36px; border-radius: 8px;
+      background: var(--accent-dim); border: 1px solid var(--accent-mid);
+      display: flex; align-items: center; justify-content: center; color: var(--accent); flex-shrink: 0;
+    }
+    .config-file-name { font-weight: 600; font-size: .9rem; word-break: break-all; }
+    .config-file-meta { color: var(--text-3); font-size: .8rem; }
+    .config-file-remove {
+      margin-left: auto; flex-shrink: 0; background: none; border: none; cursor: pointer;
+      color: var(--text-3); display: flex; align-items: center; padding: 4px; border-radius: 4px;
+    }
+    .config-file-remove:hover { color: var(--danger); }
+    .config-body { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+    .config-row  { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+    /* ─── Progress ───────────────────────────────────────── */
+    .progress-wrap { display: none; padding: 20px; border-top: 1px solid var(--border); }
+    .progress-wrap.visible { display: block; }
+    .progress-label {
+      font-size: .82rem; font-weight: 600; color: var(--text-2); margin-bottom: 8px;
+      display: flex; justify-content: space-between;
+    }
+    .progress-bar-bg { height: 6px; background: var(--bg-input); border-radius: 3px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s; width: 0%; }
+    .progress-status { color: var(--text-3); font-size: .8rem; margin-top: 8px; }
+
+    /* ─── Result table ───────────────────────────────────── */
+    .result-wrap { display: none; margin-top: 24px; }
+    .result-wrap.visible { display: block; }
+    .result-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      margin-bottom: 12px; flex-wrap: wrap;
+    }
+    .result-title { font-size: .9rem; font-weight: 700; display: flex; align-items: center; gap: 7px; }
+    .result-actions { display: flex; gap: 8px; }
+    .table-wrap {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: auto; box-shadow: var(--shadow-sm);
+    }
+    table { width: 100%; border-collapse: collapse; font-size: .83rem; }
+    thead { background: var(--bg-subtle); }
+    th {
+      padding: 10px 14px; text-align: left; font-size: .75rem; font-weight: 700;
+      letter-spacing: .04em; color: var(--text-3); text-transform: uppercase;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text-2); }
+    tr:last-child td { border-bottom: none; }
+    tbody tr:hover td { background: var(--bg-subtle); }
+
+    /* ─── CSV redirect banner ────────────────────────────── */
+    .csv-banner {
+      margin-top: 16px; background: var(--accent-dim); border: 1px solid var(--accent-mid);
+      border-radius: var(--radius); padding: 14px 18px;
+      display: flex; align-items: center; gap: 14px; font-size: .875rem;
+    }
+    .csv-banner-text { flex: 1; color: var(--text-2); }
+    .csv-banner-text strong { color: var(--text); }
+
+    /* ─── Features ───────────────────────────────────────── */
+    .section { padding: 64px 0; }
+    .section-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -.02em; }
+    .section-sub   { color: var(--text-3); font-size: .9rem; margin-bottom: 32px; }
+    .page-sep      { border: none; border-top: 1px solid var(--border); }
+    .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+    .feature-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 22px 20px;
+    }
+    .feature-icon {
+      width: 38px; height: 38px; border-radius: 9px;
+      background: var(--accent-dim); border: 1px solid var(--accent-mid);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent); margin-bottom: 14px;
+    }
+    .feature-name { font-weight: 700; font-size: .95rem; margin-bottom: 5px; }
+    .feature-desc { color: var(--text-3); font-size: .83rem; line-height: 1.55; }
+
+    /* ─── Footer ─────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border); background: var(--bg-subtle);
+      padding: 24px; text-align: center; font-size: .82rem; color: var(--text-3);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    .footer-inner { display: flex; align-items: center; justify-content: center; gap: 6px; flex-wrap: wrap; }
+    .footer-dot { opacity: .4; }
+
+    /* ─── Toast ──────────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 999;
+      background: var(--text); color: var(--bg);
+      padding: 12px 18px; border-radius: 9px;
+      font-size: .85rem; font-weight: 500; box-shadow: var(--shadow-md);
+      display: none; align-items: center; gap: 10px; max-width: 320px;
+    }
+    .toast.show { display: flex; }
+
+    @media (max-width: 700px) {
+      .config-row { grid-template-columns: 1fr; }
+      nav .nav-link { display: none; }
+    }
+    @media (max-width: 480px) {
+      .hero { padding: 48px 0 36px; }
+      .modal-backdrop { padding: 12px; }
+    }
+  </style>
 </head>
-
 <body>
 
-  <div class="container">
-    <h1>PDF Cleaner</h1>
-    <p class="subtitle">Nahraj fakturu nebo dodací list a vytvoř CSV pro IC-Office</p>
+<!-- ─── Header ───────────────────────────────────────────── -->
+<header>
+  <div class="header-inner">
+    <a class="logo" href="#">
+      <div class="logo-mark">
+        <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      </div>
+      upravpdf.eu
+    </a>
 
-    <div class="upload-box">
-      <input type="file" id="fileInput">
-      <button onclick="upload()">Převést dokument</button>
+    <nav>
+      <a class="nav-link" href="#features">Funkce</a>
+      <a class="nav-link" href="https://upravcsv.eu" target="_blank" rel="noopener">CSV Cleaner</a>
+    </nav>
+
+    <div class="header-actions">
+      <!-- Not logged in -->
+      <div id="authButtons" style="display:flex;gap:8px;align-items:center;">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('login')">Přihlásit se</button>
+        <button class="btn btn-primary btn-sm" onclick="openModal('register')">Registrovat</button>
+      </div>
+
+      <!-- Logged in -->
+      <div class="user-badge" id="userBadge">
+        <div class="user-avatar" id="userAvatar">J</div>
+        <span id="userLabel">Jan</span>
+        <button class="btn-logout" onclick="logout()" title="Odhlásit se">
+          <svg class="icon" style="width:15px;height:15px;" viewBox="0 0 24 24">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </div>
+
+      <button class="theme-toggle" onclick="toggleTheme()" title="Přepnout režim">
+        <svg class="icon" id="themeIcon" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- ─── Auth Modal ────────────────────────────────────────── -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="closeModalOnBackdrop(event)">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-header">
+      <span class="modal-title" id="modalTitle">Přihlásit se</span>
+      <button class="modal-close" onclick="closeModal()">
+        <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tabLogin"    onclick="switchTab('login')">Přihlásit se</button>
+        <button class="modal-tab"        id="tabRegister" onclick="switchTab('register')">Registrovat</button>
+      </div>
+
+      <!-- Login -->
+      <div id="formLogin">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field-group">
+            <label class="field-label" for="loginEmail">E-mailová adresa</label>
+            <input type="email" id="loginEmail" placeholder="vas@email.cz" autocomplete="email" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="loginPass">Heslo</label>
+            <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"
+                   onkeydown="if(event.key==='Enter')handleLogin()" />
+            <a class="forgot-link" href="#">Zapomenuté heslo?</a>
+          </div>
+          <button class="btn btn-primary btn-full" onclick="handleLogin()">Přihlásit se</button>
+          <div class="auth-divider">nebo</div>
+          <button class="btn btn-secondary btn-full" onclick="handleGoogleAuth()">
+            <svg style="width:17px;height:17px;flex-shrink:0;" viewBox="0 0 24 24" fill="none">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Pokračovat s Google
+          </button>
+        </div>
+      </div>
+
+      <!-- Register -->
+      <div id="formRegister" style="display:none;">
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="field-group">
+            <label class="field-label" for="regName">Celé jméno</label>
+            <input type="text" id="regName" placeholder="Jan Novák" autocomplete="name" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="regEmail">E-mailová adresa</label>
+            <input type="email" id="regEmail" placeholder="vas@email.cz" autocomplete="email" />
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="regPass">Heslo</label>
+            <input type="password" id="regPass" placeholder="min. 8 znaků" autocomplete="new-password"
+                   onkeydown="if(event.key==='Enter')handleRegister()" />
+          </div>
+          <button class="btn btn-primary btn-full" onclick="handleRegister()">Vytvořit účet</button>
+          <div class="auth-divider">nebo</div>
+          <button class="btn btn-secondary btn-full" onclick="handleGoogleAuth()">
+            <svg style="width:17px;height:17px;flex-shrink:0;" viewBox="0 0 24 24" fill="none">
+              <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+              <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+              <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+              <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+            </svg>
+            Registrovat s Google
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── Hero ─────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="container-narrow">
+    <div class="hero-label">
+      <span class="hero-label-dot"></span>
+      Automatická extrakce dat
+    </div>
+    <h1>Převeď doklady do<br><span class="accent">strukturovaných dat</span></h1>
+    <p class="hero-sub">
+      Nahraj fakturu, dodací list nebo ceník jako PDF, PNG nebo JPG.
+      Systém automaticky rozezná data, přeloží je a připraví CSV soubor k importu.
+    </p>
+    <div class="hero-chips">
+      <span class="chip">
+        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        PDF, PNG, JPG
+      </span>
+      <span class="chip">
+        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Čeština, Němčina, Angličtina
+      </span>
+      <span class="chip">
+        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Export do CSV
+      </span>
+      <span class="chip">
+        <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        PC i mobil
+      </span>
     </div>
 
-    <p id="status"></p>
-  </div>
+    <!-- Not logged in: locked state -->
+    <div id="uploadGate" class="upload-gate">
+      <div class="gate-icon">
+        <svg class="icon-xl" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <div class="gate-title">Pro nahrání dokladu se přihlas</div>
+      <div class="gate-sub">Zpracování souborů je dostupné pouze přihlášeným uživatelům.</div>
+      <div class="gate-actions">
+        <button class="btn btn-primary" onclick="openModal('login')">Přihlásit se</button>
+        <button class="btn btn-secondary" onclick="openModal('register')">Vytvořit účet zdarma</button>
+      </div>
+    </div>
 
-  <script src="script.js"></script>
+    <!-- Logged in: upload area -->
+    <div id="uploadArea" style="display:none;">
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="fileInput" accept=".pdf,.PDF,.png,.PNG,.jpg,.jpeg,.JPG,.JPEG" />
+        <div class="dz-icon">
+          <svg class="icon-xl" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        </div>
+        <div class="dz-title">Přetáhni soubor nebo klikni pro výběr</div>
+        <div class="dz-sub">Podporované formáty</div>
+        <div class="dz-formats">
+          <span class="fmt-tag">PDF</span>
+          <span class="fmt-tag">PNG</span>
+          <span class="fmt-tag">JPG / JPEG</span>
+          <span class="fmt-tag">max. 20 MB</span>
+        </div>
+      </div>
+
+      <div class="config-panel" id="configPanel">
+        <div class="config-file-bar">
+          <div class="config-file-icon">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          </div>
+          <div>
+            <div class="config-file-name" id="fileName">—</div>
+            <div class="config-file-meta" id="fileMeta">—</div>
+          </div>
+          <button class="config-file-remove" onclick="removeFile()" title="Odebrat soubor">
+            <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="config-body">
+          <div class="config-row">
+            <div class="field-group">
+              <label class="field-label" for="srcLang">Jazyk dokumentu</label>
+              <select id="srcLang">
+                <option value="auto">Automatická detekce</option>
+                <option value="cs">Čeština</option>
+                <option value="de">Němčina</option>
+                <option value="en">Angličtina</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="tgtLang">Výstupní jazyk</label>
+              <select id="tgtLang">
+                <option value="cs">Čeština</option>
+                <option value="de">Němčina</option>
+                <option value="en">Angličtina</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-row">
+            <div class="field-group">
+              <label class="field-label" for="docType">Typ dokladu</label>
+              <select id="docType">
+                <option value="auto">Automatická detekce</option>
+                <option value="invoice">Faktura</option>
+                <option value="delivery">Dodací list</option>
+                <option value="pricelist">Ceník</option>
+                <option value="other">Jiný doklad</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label class="field-label" for="outputFmt">Výstupní formát</label>
+              <select id="outputFmt">
+                <option value="csv">CSV (středník)</option>
+                <option value="csv-comma">CSV (čárka)</option>
+                <option value="tsv">TSV (tabulátor)</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-lg btn-full" onclick="runExtraction()">
+            <svg class="icon" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Spustit extrakci dat
+          </button>
+        </div>
+        <div class="progress-wrap" id="progressWrap">
+          <div class="progress-label">
+            <span>Zpracovávám...</span>
+            <span id="progressPct">0 %</span>
+          </div>
+          <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+          <div class="progress-status" id="progressStatus">Načítám soubor…</div>
+        </div>
+      </div>
+
+      <div class="result-wrap" id="resultWrap">
+        <div class="result-header">
+          <div class="result-title">
+            <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Extrahovaná data
+          </div>
+          <div class="result-actions">
+            <button class="btn btn-secondary btn-sm" onclick="copyCSV()">
+              <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              Kopírovat
+            </button>
+            <button class="btn btn-success btn-sm" onclick="downloadCSV()">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Stáhnout CSV
+            </button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table><thead><tr id="resultHead"></tr></thead><tbody id="resultBody"></tbody></table>
+        </div>
+        <div class="csv-banner">
+          <svg class="icon icon-lg" style="color:var(--accent);flex-shrink:0;" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+          </svg>
+          <div class="csv-banner-text">
+            Chceš CSV dále upravit?
+            <strong> Přejdi na upravcsv.eu</strong> – sesterský nástroj pro čištění a úpravy CSV dat.
+          </div>
+          <a class="btn btn-primary btn-sm" href="https://upravcsv.eu" target="_blank" rel="noopener">
+            Otevřít
+            <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24">
+              <line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/>
+            </svg>
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="page-sep" />
+
+<!-- ─── Features ─────────────────────────────────────────── -->
+<section class="section" id="features">
+  <div class="container">
+    <div class="section-title">Co umí upravpdf.eu</div>
+    <div class="section-sub">Navrženo pro firmy a autoservisy pracující s dodavatelskými doklady</div>
+    <div class="features-grid">
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </div>
+        <div class="feature-name">OCR rozpoznání</div>
+        <div class="feature-desc">Automatická extrakce textu z PDF, fotografií a skenů dokladů bez manuálního opisování.</div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        </div>
+        <div class="feature-name">Překlad jazyků</div>
+        <div class="feature-desc">Překlad obsahu dokladů mezi češtinou, němčinou a angličtinou. Do budoucna plánováno rozšíření.</div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+        </div>
+        <div class="feature-name">CSV výstup</div>
+        <div class="feature-desc">Data jsou exportována do přehledného CSV souboru připraveného k importu do ERP nebo skladu.</div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <div class="feature-name">Mobilní přístup</div>
+        <div class="feature-desc">Funguje v mobilním prohlížeči. Ofoť doklad telefonem a stáhni CSV přímo do mobilu.</div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="feature-name">Soukromí a bezpečnost</div>
+        <div class="feature-desc">Data jsou zpracovávána přes šifrované spojení. Soubory nejsou ukládány bez souhlasu uživatele.</div>
+      </div>
+      <div class="feature-item">
+        <div class="feature-icon">
+          <svg class="icon icon-lg" viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        </div>
+        <div class="feature-name">Propojení s CSV Cleaner</div>
+        <div class="feature-desc">Výsledný CSV soubor lze rovnou otevřít v upravcsv.eu pro další čištění, filtraci a úpravy.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ────────────────────────────────────────────── -->
+<footer>
+  <div class="footer-inner">
+    <span>© 2024 upravpdf.eu</span>
+    <span class="footer-dot">·</span>
+    <a href="https://upravcsv.eu" target="_blank" rel="noopener">CSV Cleaner – upravcsv.eu</a>
+    <span class="footer-dot">·</span>
+    <a href="#">Ochrana soukromí</a>
+    <span class="footer-dot">·</span>
+    <a href="#">Podmínky použití</a>
+  </div>
+</footer>
+
+<div class="toast" id="toast">
+  <svg class="icon" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toastMsg"></span>
+</div>
+
+<script>
+/* ── Theme ─────────────────────────────────────────────── */
+const html = document.documentElement;
+const MOON = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+const SUN  = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+function setTheme(t) {
+  html.setAttribute('data-theme', t);
+  document.getElementById('themeIcon').innerHTML = t === 'dark' ? SUN : MOON;
+  try { localStorage.setItem('pdftool-theme', t); } catch(e){}
+}
+function toggleTheme() { setTheme(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+try { const s = localStorage.getItem('pdftool-theme'); if (s) setTheme(s); } catch(e){}
+
+/* ── Auth ──────────────────────────────────────────────── */
+let currentUser = null;
+try { const u = localStorage.getItem('pdftool-user'); if (u) currentUser = JSON.parse(u); } catch(e){}
+
+function applyAuthState() {
+  const ok = !!currentUser;
+  document.getElementById('authButtons').style.display = ok ? 'none' : 'flex';
+  const badge = document.getElementById('userBadge');
+  badge.classList.toggle('visible', ok);
+  if (ok) {
+    const name = currentUser.name || currentUser.email.split('@')[0];
+    document.getElementById('userLabel').textContent = name.split(' ')[0];
+    document.getElementById('userAvatar').textContent = name[0].toUpperCase();
+  }
+  document.getElementById('uploadGate').style.display = ok ? 'none' : 'block';
+  document.getElementById('uploadArea').style.display = ok ? 'block' : 'none';
+}
+applyAuthState();
+
+function logout() {
+  currentUser = null;
+  try { localStorage.removeItem('pdftool-user'); } catch(e){}
+  applyAuthState(); removeFile();
+  showToast('Byl/a jsi odhlášen/a.');
+}
+
+/* ── Modal ──────────────────────────────────────────────── */
+function openModal(tab) {
+  document.getElementById('modalBackdrop').classList.add('open');
+  switchTab(tab || 'login');
+  setTimeout(() => {
+    const el = tab === 'register'
+      ? document.getElementById('regName')
+      : document.getElementById('loginEmail');
+    if (el) el.focus();
+  }, 120);
+}
+function closeModal() { document.getElementById('modalBackdrop').classList.remove('open'); }
+function closeModalOnBackdrop(e) { if (e.target === document.getElementById('modalBackdrop')) closeModal(); }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function switchTab(tab) {
+  const login = tab === 'login';
+  document.getElementById('formLogin').style.display    = login ? '' : 'none';
+  document.getElementById('formRegister').style.display = login ? 'none' : '';
+  document.getElementById('tabLogin').classList.toggle('active', login);
+  document.getElementById('tabRegister').classList.toggle('active', !login);
+  document.getElementById('modalTitle').textContent = login ? 'Přihlásit se' : 'Vytvořit účet';
+}
+
+function handleLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) { showToast('Vyplň e-mail a heslo.'); return; }
+  if (!email.includes('@')) { showToast('Zadej platný e-mail.'); return; }
+  currentUser = { email, name: email.split('@')[0] };
+  try { localStorage.setItem('pdftool-user', JSON.stringify(currentUser)); } catch(e){}
+  closeModal(); applyAuthState();
+  showToast('Přihlášení proběhlo úspěšně.');
+}
+
+function handleRegister() {
+  const name  = document.getElementById('regName').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass  = document.getElementById('regPass').value;
+  if (!name || !email || !pass) { showToast('Vyplň všechna pole.'); return; }
+  if (!email.includes('@')) { showToast('Zadej platný e-mail.'); return; }
+  if (pass.length < 8) { showToast('Heslo musí mít alespoň 8 znaků.'); return; }
+  currentUser = { email, name };
+  try { localStorage.setItem('pdftool-user', JSON.stringify(currentUser)); } catch(e){}
+  closeModal(); applyAuthState();
+  showToast('Účet byl vytvořen. Vítej, ' + name.split(' ')[0] + '!');
+}
+
+function handleGoogleAuth() { showToast('Google přihlášení bude dostupné po spuštění backendu.'); }
+
+/* ── File handling ──────────────────────────────────────── */
+let currentFile = null, extractedData = null;
+const dropzone  = document.getElementById('dropzone');
+const fileInput = document.getElementById('fileInput');
+
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('over'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('over'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault(); dropzone.classList.remove('over');
+  const f = e.dataTransfer.files[0]; if (f) loadFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) loadFile(fileInput.files[0]); });
+
+function loadFile(f) {
+  const ext = f.name.split('.').pop().toLowerCase();
+  if (!['pdf','png','jpg','jpeg'].includes(ext)) { showToast('Nepodporovaný formát. Použij PDF, PNG nebo JPG.'); return; }
+  if (f.size > 20*1024*1024) { showToast('Soubor je příliš velký (max. 20 MB).'); return; }
+  currentFile = f;
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('fileMeta').textContent  = formatSize(f.size) + ' · ' + ext.toUpperCase();
+  document.getElementById('configPanel').classList.add('visible');
+  document.getElementById('progressWrap').classList.remove('visible');
+  document.getElementById('resultWrap').classList.remove('visible');
+  extractedData = null;
+}
+function removeFile() {
+  currentFile = null; extractedData = null;
+  if (fileInput) fileInput.value = '';
+  document.getElementById('configPanel').classList.remove('visible');
+  document.getElementById('resultWrap').classList.remove('visible');
+}
+function formatSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(1) + ' MB';
+}
+
+/* ── Extraction (demo) ──────────────────────────────────── */
+function runExtraction() {
+  if (!currentFile) return;
+  const fill   = document.getElementById('progressFill');
+  const pct    = document.getElementById('progressPct');
+  const status = document.getElementById('progressStatus');
+  document.getElementById('progressWrap').classList.add('visible');
+  document.getElementById('resultWrap').classList.remove('visible');
+
+  const steps = [
+    [10,'Načítám soubor…'],[30,'Rozpoznávám text (OCR)…'],
+    [55,'Detekuji strukturu dokladu…'],[75,'Překládám obsah…'],
+    [92,'Sestavuji CSV výstup…'],[100,'Hotovo'],
+  ];
+  let i = 0;
+  const iv = setInterval(() => {
+    if (i >= steps.length) { clearInterval(iv); showResult(); return; }
+    const [p, lbl] = steps[i++];
+    fill.style.width = p + '%'; pct.textContent = p + ' %'; status.textContent = lbl;
+  }, 500);
+}
+
+function showResult() {
+  const tgt = document.getElementById('tgtLang').value;
+  const doc = document.getElementById('docType').value;
+  let headers, rows;
+
+  if (doc === 'pricelist') {
+    headers = tgt==='de' ? ['Artikelnummer','Bezeichnung','Preis (EUR)','MwSt.','Lager']
+            : tgt==='en' ? ['Part number','Description','Price (EUR)','VAT','Stock']
+            :               ['Číslo dílu','Popis','Cena (EUR)','DPH','Sklad'];
+    rows = [
+      ['1023-AF','Vzduchový filtr MANN C30130','4,90','21 %','Ano'],
+      ['2041-OF','Olejový filtr MANN W712/83','3,60','21 %','Ano'],
+      ['3088-BL','Brzdová kapalina DOT 4 – 1L','6,20','21 %','Ano'],
+      ['4120-SK','Sada spojky SACHS 3000970005','189,00','21 %','Objednat'],
+    ];
+  } else if (doc === 'delivery') {
+    headers = tgt==='de' ? ['Pos.','Artikelnummer','Bezeichnung','Menge','Einheit']
+            : tgt==='en' ? ['Pos.','Part No.','Description','Qty','Unit']
+            :               ['Pos.','Číslo dílu','Popis','Množství','Jednotka'];
+    rows = [
+      ['1','1023-AF','Vzduchový filtr MANN C30130','5','ks'],
+      ['2','2041-OF','Olejový filtr MANN W712/83','10','ks'],
+      ['3','3088-BL','Brzdová kapalina DOT 4 – 1L','3','ks'],
+    ];
+  } else {
+    headers = tgt==='de' ? ['Pos.','Bezeichnung','Menge','E-Preis','Gesamt','MwSt.']
+            : tgt==='en' ? ['Pos.','Description','Qty','Unit price','Total','VAT']
+            :               ['Pos.','Popis','Množství','Jedn. cena','Celkem','DPH'];
+    rows = [
+      ['1','Vzduchový filtr MANN C30130','5','4,90 EUR','24,50 EUR','21 %'],
+      ['2','Olejový filtr MANN W712/83','10','3,60 EUR','36,00 EUR','21 %'],
+      ['3','Brzdová kapalina DOT 4 – 1L','3','6,20 EUR','18,60 EUR','21 %'],
+      ['','','','Mezisoučet','79,10 EUR',''],
+      ['','','','DPH 21 %','16,61 EUR',''],
+      ['','','','Celkem','95,71 EUR',''],
+    ];
+  }
+  extractedData = { headers, rows };
+  document.getElementById('resultHead').innerHTML = headers.map(h=>`<th>${h}</th>`).join('');
+  document.getElementById('resultBody').innerHTML = rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join('');
+  document.getElementById('resultWrap').classList.add('visible');
+  document.getElementById('resultWrap').scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+/* ── CSV export ────────────────────────────────────────── */
+function buildCSV() {
+  if (!extractedData) return '';
+  const sep = {'csv':';','csv-comma':',','tsv':'\t'}[document.getElementById('outputFmt').value] || ';';
+  return [extractedData.headers, ...extractedData.rows]
+    .map(r => r.map(c=>`"${c.replace(/"/g,'""')}"`).join(sep)).join('\r\n');
+}
+function downloadCSV() {
+  const csv = buildCSV(); if (!csv) return;
+  const a = Object.assign(document.createElement('a'), {
+    href: URL.createObjectURL(new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8;'})),
+    download: (currentFile ? currentFile.name.replace(/\.[^.]+$/,'') : 'doklad') + '_export.csv',
+  });
+  a.click(); URL.revokeObjectURL(a.href);
+  showToast('CSV soubor byl stažen.');
+}
+function copyCSV() {
+  navigator.clipboard.writeText(buildCSV()).then(() => showToast('CSV zkopírováno do schránky.'));
+}
+
+/* ── Toast ─────────────────────────────────────────────── */
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
+}
+</script>
 </body>
 </html>
