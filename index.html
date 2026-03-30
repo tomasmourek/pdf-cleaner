@@ -202,6 +202,21 @@
     .ocr-badge-real{background:#dcfce7;color:#166534}
     [data-theme="dark"] .ocr-badge-real{background:#14532d;color:#86efac}
 
+    /* Column picker */
+    .col-picker{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-top:16px;box-shadow:var(--shadow-sm)}
+    .col-picker-header{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--border);background:var(--bg-subtle)}
+    .col-picker-title{font-size:.87rem;font-weight:700;display:flex;align-items:center;gap:7px;color:var(--text-2)}
+    .col-picker-actions{display:flex;gap:6px}
+    .col-picker-body{padding:14px 18px;display:flex;flex-wrap:wrap;gap:8px}
+    .col-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:7px;border:1.5px solid var(--border);background:var(--bg-subtle);cursor:pointer;font-size:.82rem;font-weight:500;color:var(--text-2);transition:all .15s;user-select:none}
+    .col-chip:hover{border-color:var(--accent);color:var(--text)}
+    .col-chip.selected{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);font-weight:600}
+    .col-chip-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border-mid);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s}
+    .col-chip.selected .col-chip-check{background:var(--accent);border-color:var(--accent)}
+    .col-picker-footer{padding:12px 18px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+    .col-picker-hint{font-size:.78rem;color:var(--text-3)}
+    .col-picker-count{font-size:.78rem;color:var(--accent);font-weight:600}
+
     @media(max-width:700px){.config-row{grid-template-columns:1fr}nav .nav-link{display:none}}
     @media(max-width:480px){.hero{padding:48px 0 36px}.modal-backdrop{padding:12px}}
   </style>
@@ -389,11 +404,17 @@
           <div class="field-group">
             <label class="field-label" for="pdfPage">Strana PDF (pouze pro PDF soubory)</label>
             <select id="pdfPage">
+              <option value="all">Všechny strany</option>
               <option value="1">Strana 1</option>
               <option value="2">Strana 2</option>
               <option value="3">Strana 3</option>
               <option value="4">Strana 4</option>
               <option value="5">Strana 5</option>
+              <option value="6">Strana 6</option>
+              <option value="7">Strana 7</option>
+              <option value="8">Strana 8</option>
+              <option value="9">Strana 9</option>
+              <option value="10">Strana 10</option>
             </select>
           </div>
           <button class="btn btn-primary btn-lg btn-full" onclick="runOCR()" id="runBtn">
@@ -413,9 +434,9 @@
 
       <!-- Result -->
       <div class="result-wrap" id="resultWrap">
-        <div class="ocr-badge ocr-badge-real">
+        <div class="ocr-badge ocr-badge-real" id="ocrBadge">
           <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-          Skutečná OCR extrakce – Tesseract.js
+          Připraveno
         </div>
         <div class="result-header">
           <div class="result-title">
@@ -434,8 +455,28 @@
             </button>
           </div>
         </div>
+
         <div class="table-wrap">
           <table><thead><tr id="resultHead"></tr></thead><tbody id="resultBody"></tbody></table>
+        </div>
+
+        <!-- Column picker -->
+        <div class="col-picker" id="colPicker">
+          <div class="col-picker-header">
+            <div class="col-picker-title">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              Vyber sloupce pro export do CSV
+            </div>
+            <div class="col-picker-actions">
+              <button class="btn btn-ghost btn-sm" onclick="colPickAll(true)">Vybrat vše</button>
+              <button class="btn btn-ghost btn-sm" onclick="colPickAll(false)">Zrušit vše</button>
+            </div>
+          </div>
+          <div class="col-picker-body" id="colPickerBody"></div>
+          <div class="col-picker-footer">
+            <span class="col-picker-hint">Zaškrtni sloupce které chceš zahrnout do CSV souboru</span>
+            <span class="col-picker-count" id="colPickerCount">0 / 0 sloupců</span>
+          </div>
         </div>
 
         <!-- Raw OCR text toggle -->
@@ -605,12 +646,21 @@ function loadFile(f){
   currentFile=f;
   document.getElementById('fileName').textContent=f.name;
   document.getElementById('fileMeta').textContent=formatSize(f.size)+' · '+ext.toUpperCase();
-  // Show/hide PDF page selector
-  document.getElementById('pdfPage').parentElement.style.display=ext==='pdf'?'flex':'none';
+  const pageWrap=document.getElementById('pdfPage').parentElement;
+  pageWrap.style.display=ext==='pdf'?'flex':'none';
   document.getElementById('configPanel').classList.add('visible');
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('resultWrap').classList.remove('visible');
   tableData=[];rawOCRText='';
+  // Detect actual page count for PDFs and update selector
+  if(ext==='pdf'){
+    f.arrayBuffer().then(buf=>pdfjsLib.getDocument({data:buf}).promise).then(pdf=>{
+      const n=pdf.numPages;
+      const sel=document.getElementById('pdfPage');
+      sel.innerHTML=(n>1?'<option value="all">Všechny strany ('+n+')</option>':'')+
+        Array.from({length:n},(_,i)=>`<option value="${i+1}">Strana ${i+1}</option>`).join('');
+    }).catch(()=>{});
+  }
 }
 function removeFile(){
   currentFile=null;tableData=[];rawOCRText='';
@@ -624,57 +674,75 @@ function formatSize(b){if(b<1024)return b+' B';if(b<1048576)return(b/1024).toFix
 async function runOCR(){
   if(!currentFile)return;
   const btn=document.getElementById('runBtn');
-  btn.disabled=true;
-  btn.textContent='Zpracovávám…';
-
+  btn.disabled=true;btn.textContent='Zpracovávám…';
   const pw=document.getElementById('progressWrap');
   const fill=document.getElementById('progressFill');
   const pct=document.getElementById('progressPct');
   const status=document.getElementById('progressStatus');
   pw.classList.add('visible');
   document.getElementById('resultWrap').classList.remove('visible');
-
   setProgress(fill,pct,status,5,'Připravuji soubor…');
-
-  try {
-    let imageSource;
+  try{
     const ext=currentFile.name.split('.').pop().toLowerCase();
-
-    if(ext==='pdf'){
-      setProgress(fill,pct,status,15,'Načítám PDF…');
-      imageSource=await pdfToCanvas(currentFile, parseInt(document.getElementById('pdfPage').value)||1);
-      setProgress(fill,pct,status,30,'PDF převedeno na obraz…');
-    } else {
-      imageSource=currentFile;
-      setProgress(fill,pct,status,20,'Obraz načten…');
-    }
-
+    let items=[],pageWidth=1000,usedNative=false;
+    const pageVal=document.getElementById('pdfPage').value;
     const lang=document.getElementById('srcLang').value;
     const langCode=lang==='auto'?'ces+deu+eng':lang;
-
-    setProgress(fill,pct,status,35,'Spouštím OCR engine (Tesseract.js)…');
-
-    const result = await Tesseract.recognize(imageSource, langCode, {
-      logger: m => {
-        if(m.status==='recognizing text'){
-          const p=35+Math.round(m.progress*55);
-          setProgress(fill,pct,status,p,'Rozpoznávám text… '+Math.round(m.progress*100)+' %');
-        }
+    if(ext==='pdf'){
+      setProgress(fill,pct,status,15,'Čtu strukturu PDF…');
+      const pdfResult=await extractPDFNative(currentFile,pageVal);
+      pageWidth=pdfResult.pageWidth;
+      if(pdfResult.items.length>=10){
+        items=pdfResult.items;
+        usedNative=true;
+        // Build line-based raw text: sort by Y, group into lines, join with tabs
+        rawOCRText=buildRawTextFromItems(items);
+        setProgress(fill,pct,status,80,'Rekonstruuji strukturu sloupců…');
+      } else {
+        setProgress(fill,pct,status,20,'PDF neobsahuje textovou vrstvu, spouštím OCR…');
+        const firstPage=pageVal==='all'?1:(parseInt(pageVal)||1);
+        const canvas=await pdfToCanvas(currentFile,firstPage);
+        pageWidth=canvas.width;
+        const result=await Tesseract.recognize(canvas,langCode,{
+          logger:m=>{
+            if(m.status==='recognizing text'){
+              const p=20+Math.round(m.progress*55);
+              setProgress(fill,pct,status,p,'OCR… '+Math.round(m.progress*100)+' %');
+            }
+          }
+        });
+        rawOCRText=result.data.text;
+        items=tesseractWordsToItems(result.data.words);
+        setProgress(fill,pct,status,80,'Rekonstruuji strukturu sloupců…');
       }
-    });
-
-    rawOCRText=result.data.text;
-    setProgress(fill,pct,status,95,'Strukturuji data…');
-    tableData=parseOCRToTable(rawOCRText);
-    setProgress(fill,pct,status,100,'Hotovo');
+    } else {
+      const img=await loadImageFile(currentFile);
+      pageWidth=img.width||1000;
+      setProgress(fill,pct,status,20,'Spouštím Tesseract OCR…');
+      const result=await Tesseract.recognize(img,langCode,{
+        logger:m=>{
+          if(m.status==='recognizing text'){
+            const p=20+Math.round(m.progress*58);
+            setProgress(fill,pct,status,p,'OCR… '+Math.round(m.progress*100)+' %');
+          }
+        }
+      });
+      rawOCRText=result.data.text;
+      items=tesseractWordsToItems(result.data.words);
+      setProgress(fill,pct,status,80,'Rekonstruuji strukturu sloupců…');
+    }
+    tableData=reconstructFromItems(items,pageWidth)||parseOCRToTable(rawOCRText);
+    setProgress(fill,pct,status,100,'Hotovo — '+tableData.rows.length+' řádků');
+    const badge=document.getElementById('ocrBadge');
+    if(badge){
+      badge.innerHTML='<svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg> '+(usedNative?'PDF nativní extrakce – přesná struktura':'OCR extrakce – Tesseract.js');
+    }
     renderResult();
-
-  } catch(err){
+  }catch(err){
     console.error(err);
-    showToast('Chyba OCR: '+err.message);
-    setProgress(fill,pct,status,0,'Chyba');
+    showToast('Chyba: '+err.message);
+    setProgress(fill,pct,status,0,'Chyba: '+err.message);
   }
-
   btn.disabled=false;
   btn.innerHTML='<svg class="icon" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Spustit OCR znovu';
 }
@@ -685,12 +753,23 @@ function setProgress(fill,pct,status,p,txt){
   status.textContent=txt;
 }
 
+/* ── Load image → HTMLImageElement (for bbox dimensions) ─ */
+function loadImageFile(file){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{URL.revokeObjectURL(url);resolve(img);};
+    img.onerror=reject;
+    img.src=url;
+  });
+}
+
 /* ── PDF → Canvas ───────────────────────────────────────── */
 async function pdfToCanvas(file, pageNum){
   const arrayBuffer=await file.arrayBuffer();
   const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
   const page=await pdf.getPage(Math.min(pageNum, pdf.numPages));
-  const scale=2.0; // higher = better OCR quality
+  const scale=2.5; // higher scale = better OCR accuracy
   const viewport=page.getViewport({scale});
   const canvas=document.createElement('canvas');
   canvas.width=viewport.width;
@@ -700,58 +779,279 @@ async function pdfToCanvas(file, pageNum){
   return canvas;
 }
 
-/* ── Parse OCR text → table rows ───────────────────────── */
+/* ── Fix double-encoded UTF-8 (bytes read as Latin-1) ────────── */
+function fixEncoding(str){
+  // Detect typical pattern: Ã followed by high-bit char (UTF-8 misread as Latin-1)
+  if(!/[\xC3\xC4\xC5]/.test(str)&&!/Ã|Ä|Å/.test(str))return str;
+  try{
+    const bytes=new Uint8Array(str.length);
+    for(let i=0;i<str.length;i++)bytes[i]=str.charCodeAt(i)&0xFF;
+    const dec=new TextDecoder('utf-8',{fatal:false}).decode(bytes);
+    // Accept fix only if it reduced replacement chars vs original
+    if((dec.match(/\uFFFD/g)||[]).length<=(str.match(/[ÃÄÅ]/g)||[]).length)return dec;
+  }catch(e){}
+  return str;
+}
+
+/* ── PDF native text extraction (digital PDFs) ──────────────── */
+async function extractPDFNative(file, pageMode){
+  const arrayBuffer=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:arrayBuffer}).promise;
+  const totalPages=pdf.numPages;
+  let pagesToProcess;
+  if(pageMode==='all'){
+    pagesToProcess=Array.from({length:totalPages},(_,i)=>i+1);
+  } else {
+    pagesToProcess=[Math.min(parseInt(pageMode)||1,totalPages)];
+  }
+  let allItems=[],pageWidth=595,yOffset=0;
+  for(const pNum of pagesToProcess){
+    const page=await pdf.getPage(pNum);
+    const viewport=page.getViewport({scale:1});
+    pageWidth=Math.max(pageWidth,viewport.width);
+    const textContent=await page.getTextContent();
+    for(const item of textContent.items){
+      const raw=(item.str||'').trim();
+      if(!raw)continue;
+      const txt=fixEncoding(raw);
+      const x=item.transform[4];
+      const y=(viewport.height-item.transform[5])+yOffset;
+      const h=Math.abs(item.transform[3])||10;
+      allItems.push({text:txt,x,y,width:item.width||40,height:h,confidence:99});
+    }
+    yOffset+=viewport.height+30;
+  }
+  return{items:allItems,pageWidth,totalPages};
+}
+
+/* ── Convert Tesseract words → unified item format ────────────── */
+function tesseractWordsToItems(words){
+  return(words||[])
+    .filter(w=>w.confidence>25&&w.text.trim().length>0)
+    .map(w=>({
+      text:w.text.trim(),
+      x:w.bbox.x0,
+      y:(w.bbox.y0+w.bbox.y1)/2,
+      width:w.bbox.x1-w.bbox.x0,
+      height:w.bbox.y1-w.bbox.y0,
+      confidence:w.confidence
+    }));
+}
+
+/* ── Build readable raw text from positioned items ───────── */
+function buildRawTextFromItems(items){
+  if(!items||!items.length)return'';
+  const sorted=[...items].sort((a,b)=>a.y!==b.y?a.y-b.y:a.x-b.x);
+  const lines=[];
+  let line=[],lastY=-9999;
+  for(const it of sorted){
+    if(it.y-lastY>6){if(line.length)lines.push(line.map(i=>i.text).join('\t'));line=[it];lastY=it.y;}
+    else line.push(it);
+  }
+  if(line.length)lines.push(line.map(i=>i.text).join('\t'));
+  return lines.join('\n');
+}
+
+/* ══════════════════════════════════════════════════════════
+   Reconstruct table from positioned text items
+   Works for both PDF native text and Tesseract OCR words
+   ══════════════════════════════════════════════════════════ */
+function reconstructFromItems(items,pageWidth){
+  if(!items||items.length<3)return null;
+
+  // Determine row height from median item height
+  const heights=items.map(i=>i.height).filter(h=>h>2).sort((a,b)=>a-b);
+  const medH=heights.length?heights[Math.floor(heights.length*0.5)]:12;
+  const ROW_TOL=Math.max(3,medH*0.55);
+
+  // Cluster items into rows by Y position
+  const rows=[];
+  for(const item of [...items].sort((a,b)=>a.y-b.y)){
+    const row=rows.find(r=>Math.abs(r.avgY-item.y)<ROW_TOL);
+    if(row){
+      row.items.push(item);
+      row.avgY=row.items.reduce((s,i)=>s+i.y,0)/row.items.length;
+    } else {
+      rows.push({avgY:item.y,items:[item]});
+    }
+  }
+  rows.sort((a,b)=>a.avgY-b.avgY);
+  rows.forEach(r=>r.items.sort((a,b)=>a.x-b.x));
+  if(rows.length===0)return null;
+
+  // Detect section breaks (Y gap > 2.5× median row gap)
+  const rowGaps=rows.slice(1).map((r,i)=>r.avgY-rows[i].avgY);
+  const sortedGaps=[...rowGaps].sort((a,b)=>a-b);
+  const medGap=sortedGaps.length?sortedGaps[Math.floor(sortedGaps.length*0.5)]:20;
+  const SECTION_GAP=Math.max(medGap*2.5,medH*3);
+  let sectionId=0;
+  rows[0].sectionId=0;
+  for(let i=1;i<rows.length;i++){
+    if(rows[i].avgY-rows[i-1].avgY>SECTION_GAP)sectionId++;
+    rows[i].sectionId=sectionId;
+  }
+
+  // Cluster X positions into column anchors
+  // Use only rows with ≥3 items (= table rows) to build anchors —
+  // single-item lines (addresses, footers) would pollute the column detection
+  const tableRowItems=rows.filter(r=>r.items.length>=3);
+  const anchorSource=tableRowItems.length>=2?tableRowItems:rows;
+  const COL_TOL=Math.max(6,pageWidth*0.022);
+  const colAnchors=clusterValues(anchorSource.flatMap(r=>r.items.map(i=>i.x)),COL_TOL).sort((a,b)=>a-b);
+  if(colAnchors.length<2)return null; // need at least 2 columns to be a table
+  const numCols=colAnchors.length;
+
+  // Map rows to cells
+  const mappedRows=rows.map(row=>{
+    const cells=new Array(numCols).fill('');
+    for(const item of row.items){
+      const ci=nearestIndex(item.x,colAnchors);
+      cells[ci]=cells[ci]?cells[ci]+' '+item.text:item.text;
+    }
+    return{cells,sectionId:row.sectionId};
+  });
+
+  // Remove entirely empty columns
+  const usedCols=colAnchors.map((_,ci)=>
+    mappedRows.some(r=>r.cells[ci]&&r.cells[ci].trim())
+  );
+  const nCols=usedCols.filter(Boolean).length;
+  if(nCols===0)return null;
+
+  // Keep ALL rows 1:1 — no filtering, no collapsing
+  // Row selection/deletion is the job of upravcsv.eu
+
+  // Auto-detect header: first row without digits and ≥2 non-empty cells
+  const NUM_RE=/\d/;
+  const firstCells=mappedRows[0].cells.filter((_,ci)=>usedCols[ci]);
+  const firstHasNum=firstCells.some(c=>NUM_RE.test(c));
+  let headers,dataRows;
+  if(!firstHasNum&&firstCells.filter(c=>c.trim()).length>=2){
+    headers=firstCells.map(c=>c.trim()||'—');
+    dataRows=mappedRows.slice(1);
+  } else {
+    headers=generateHeaders(nCols);
+    dataRows=mappedRows;
+  }
+
+  // Build final rows
+  const finalRows=dataRows.map(r=>{
+    let cells=r.cells.filter((_,ci)=>usedCols[ci]);
+    while(cells.length<headers.length)cells.push('');
+    return cells.slice(0,headers.length);
+  });
+
+  return{headers,rows:finalRows};
+}
+
+/* ── Cluster numeric values with tolerance ──────────────── */
+function clusterValues(values, tol){
+  const sorted=[...new Set(values.map(v=>Math.round(v)))].sort((a,b)=>a-b);
+  const clusters=[];
+  for(const v of sorted){
+    const c=clusters.find(x=>Math.abs(x.center-v)<tol);
+    if(c){c.vals.push(v);c.center=c.vals.reduce((a,b)=>a+b,0)/c.vals.length;}
+    else clusters.push({center:v,vals:[v]});
+  }
+  return clusters.map(c=>c.center);
+}
+
+/* ── Find nearest column index ──────────────────────────── */
+function nearestIndex(x, anchors){
+  let best=0, bestD=Infinity;
+  anchors.forEach((a,i)=>{const d=Math.abs(a-x);if(d<bestD){bestD=d;best=i;}});
+  return best;
+}
+
+/* ── Fallback: line-based parse ─────────────────────────── */
 function parseOCRToTable(text){
   const lines=text.split('\n').map(l=>l.trimEnd()).filter(l=>l.trim().length>1);
-  if(!lines.length)return[['Řádek','Obsah'],[['1','(žádný text nebyl rozpoznán)']]];
+  if(!lines.length) return{headers:['#','Text'],rows:[['1','(žádný text nebyl rozpoznán)']]};
 
-  // Detect if table-like (lines with consistent column separation by 2+ spaces)
-  const splitLines=lines.map(l=>splitColumns(l));
+  const splitLines=lines.map(l=>l.split(/\t|\s{2,}/).map(c=>c.trim()).filter(c=>c.length>0));
   const colCounts=splitLines.map(c=>c.length);
   const maxCols=Math.max(...colCounts);
   const avgCols=colCounts.reduce((a,b)=>a+b,0)/colCounts.length;
 
   let headers, rows;
-  if(maxCols>=2 && avgCols>=1.5){
-    // Table-like structure
-    headers=splitLines[0].length>=2?splitLines[0]:generateHeaders(maxCols);
-    const dataStart=splitLines[0].length>=2?1:0;
-    rows=splitLines.slice(dataStart).map(cols=>{
-      while(cols.length<maxCols)cols.push('');
-      return cols.slice(0,maxCols);
-    });
-    if(dataStart===0){
-      headers=generateHeaders(maxCols);
-      rows=splitLines;
+  if(maxCols>=2&&avgCols>=1.5){
+    const firstHasNum=splitLines[0].some(c=>/\d/.test(c));
+    if(!firstHasNum&&splitLines[0].length>=2){
+      headers=splitLines[0]; rows=splitLines.slice(1);
+    } else {
+      headers=generateHeaders(maxCols); rows=splitLines;
     }
+    rows=rows.map(r=>{while(r.length<headers.length)r.push('');return r.slice(0,headers.length);});
   } else {
-    // Single column fallback
     headers=['#','Text'];
     rows=lines.map((l,i)=>[(i+1).toString(),l.trim()]);
   }
-  return{headers, rows};
-}
-
-function splitColumns(line){
-  // Split by 2+ spaces or tab characters
-  return line.split(/\t|\s{2,}/).map(c=>c.trim()).filter(c=>c.length>0);
+  return{headers,rows};
 }
 
 function generateHeaders(n){
-  const names=['Sloupec A','Sloupec B','Sloupec C','Sloupec D','Sloupec E','Sloupec F'];
-  return Array.from({length:n},(_,i)=>names[i]||('Sl. '+(i+1)));
+  const names=['Kód','Popis','Množství','J.cena','Sleva','DPH','Celkem','Jednotka','Značka','Sloupec J'];
+  return Array.from({length:n},(_,i)=>names[i]||('Sl.'+(i+1)));
 }
 
-/* ── Render table ───────────────────────────────────────── */
+/* ── Column selection state ─────────────────────────────── */
+let colSelected=[];
+
+/* ── Render table + column picker ──────────────────────── */
 function renderResult(){
   const {headers,rows}=tableData;
-  document.getElementById('resultHead').innerHTML=headers.map(h=>`<th>${escH(h)}</th>`).join('');
-  document.getElementById('resultBody').innerHTML=rows.map((r,ri)=>
-    `<tr>${r.map((c,ci)=>`<td contenteditable="true" class="editable-cell" data-r="${ri}" data-c="${ci}" onblur="cellEdit(this)">${escH(c)}</td>`).join('')}</tr>`
-  ).join('');
+  colSelected=headers.map(()=>true);
+
+  document.getElementById('resultHead').innerHTML=
+    headers.map(h=>`<th>${escH(h)}</th>`).join('');
+  document.getElementById('resultBody').innerHTML=
+    rows.map((r,ri)=>
+      `<tr>${r.map((c,ci)=>
+        `<td contenteditable="true" class="editable-cell" data-r="${ri}" data-c="${ci}" onblur="cellEdit(this)">${escH(c)}</td>`
+      ).join('')}</tr>`
+    ).join('');
+
+  renderColPicker();
   document.getElementById('rawContent').textContent=rawOCRText;
   document.getElementById('resultWrap').classList.add('visible');
   document.getElementById('resultWrap').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function renderColPicker(){
+  const {headers}=tableData;
+  const body=document.getElementById('colPickerBody');
+  body.innerHTML=headers.map((h,i)=>`
+    <div class="col-chip ${colSelected[i]?'selected':''}" onclick="toggleCol(${i})">
+      <div class="col-chip-check">
+        ${colSelected[i]?`<svg width="9" height="9" viewBox="0 0 12 12" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><polyline points="2 6 5 9 10 3"/></svg>`:''}
+      </div>
+      ${escH(h)}
+    </div>`).join('');
+  updateColCount();
+}
+
+function toggleCol(i){
+  colSelected[i]=!colSelected[i];
+  renderColPicker();
+  applyColHighlight();
+}
+
+function colPickAll(val){
+  colSelected=colSelected.map(()=>val);
+  renderColPicker();
+  applyColHighlight();
+}
+
+function updateColCount(){
+  const on=colSelected.filter(Boolean).length;
+  document.getElementById('colPickerCount').textContent=on+' / '+colSelected.length+' sloupců';
+}
+
+function applyColHighlight(){
+  const ths=document.querySelectorAll('#resultHead th');
+  const tds=document.querySelectorAll('#resultBody td');
+  ths.forEach((th,i)=>{th.style.opacity=colSelected[i]?'1':'0.3';});
+  tds.forEach(td=>{td.style.opacity=colSelected[+td.dataset.c]?'1':'0.3';});
 }
 
 function cellEdit(el){
@@ -773,7 +1073,11 @@ function toggleRaw(){
 function buildCSV(){
   if(!tableData||!tableData.headers)return'';
   const sep={'csv':';','csv-comma':',','tsv':'\t'}[document.getElementById('outputFmt').value]||';';
-  return[tableData.headers,...tableData.rows]
+  const useColSel=colSelected.length===tableData.headers.length;
+  const selIdx=tableData.headers.map((_,i)=>i).filter(i=>!useColSel||colSelected[i]);
+  const selHeaders=selIdx.map(i=>tableData.headers[i]);
+  const selRows=tableData.rows.map(r=>selIdx.map(i=>r[i]??''));
+  return[selHeaders,...selRows]
     .map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(sep))
     .join('\r\n');
 }
