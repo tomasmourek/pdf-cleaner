@@ -233,7 +233,6 @@
       upravpdf.eu
     </a>
     <nav>
-      <a class="nav-link" href="#features">Funkce</a>
       <a class="nav-link" href="https://upravcsv.eu" target="_blank" rel="noopener">CSV Cleaner</a>
     </nav>
     <div class="header-actions">
@@ -329,7 +328,7 @@
   <div class="container-narrow">
     <div class="hero-label"><span class="hero-label-dot"></span>Automatická extrakce dat – OCR v prohlížeči</div>
     <h1>Převeď doklady do<br><span class="accent">strukturovaných dat</span></h1>
-    <p class="hero-sub">Nahraj fakturu, dodací list nebo ceník jako PDF, PNG nebo JPG. OCR engine rozezná text přímo v prohlížeči a připraví CSV k importu.</p>
+    <p class="hero-sub">Nahraj fakturu nebo dodací list jako PDF, PNG nebo JPG. OCR engine rozezná text přímo v prohlížeči a připraví CSV k importu.</p>
     <div class="hero-chips">
       <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>PDF, PNG, JPG</span>
       <span class="chip"><svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>Čeština, Němčina, Angličtina</span>
@@ -363,7 +362,6 @@
           <span class="fmt-tag">PDF</span>
           <span class="fmt-tag">PNG</span>
           <span class="fmt-tag">JPG / JPEG</span>
-          <span class="fmt-tag">max. 20 MB</span>
         </div>
       </div>
 
@@ -438,13 +436,11 @@
           <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
           Připraveno
         </div>
-        <div class="result-header">
-          <div class="result-title">
-            <svg class="icon" viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-            Extrahovaná data
-            <span style="font-size:.75rem;font-weight:400;color:var(--text-3)">(buňky lze ručně upravit)</span>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+          <div style="font-size:.9rem;font-weight:600;color:var(--text-2);">
+            Extrakce dokončena — <span id="resultSummary" style="color:var(--text)"></span>
           </div>
-          <div class="result-actions">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-secondary btn-sm" onclick="copyCSV()">
               <svg class="icon" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Kopírovat
@@ -454,10 +450,6 @@
               Stáhnout CSV
             </button>
           </div>
-        </div>
-
-        <div class="table-wrap">
-          <table><thead><tr id="resultHead"></tr></thead><tbody id="resultBody"></tbody></table>
         </div>
 
         <!-- Column picker -->
@@ -479,14 +471,9 @@
           </div>
         </div>
 
-        <!-- Raw OCR text toggle -->
-        <div class="ocr-raw-box" id="rawBox">
-          <div class="ocr-raw-header" onclick="toggleRaw()">
-            <span>Zobrazit surový OCR text</span>
-            <svg class="icon" id="rawChevron" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-          </div>
-          <div class="ocr-raw-content" id="rawContent"></div>
-        </div>
+        <!-- Hidden table and raw text (JS compatibility) -->
+        <table style="display:none"><thead><tr id="resultHead"></tr></thead><tbody id="resultBody"></tbody></table>
+        <div id="rawContent" style="display:none"></div>
 
         <div class="csv-banner" style="margin-top:16px;">
           <svg class="icon icon-lg" style="color:var(--accent);flex-shrink:0;" viewBox="0 0 24 24">
@@ -503,14 +490,7 @@
   </div>
 </section>
 
-<hr class="page-sep"/>
-
-<!-- Features -->
-<section class="section" id="features">
-  <div class="container">
-    <div class="section-title">Co umí upravpdf.eu</div>
-    <div class="section-sub">Navrženo pro firmy a autoservisy pracující s dodavatelskými doklady</div>
-    <div class="features-grid">
+<div style="display:none"><!-- Features removed --><div class="features-grid">
       <div class="feature-item">
         <div class="feature-icon"><svg class="icon icon-lg" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
         <div class="feature-name">OCR v prohlížeči</div>
@@ -543,7 +523,7 @@
       </div>
     </div>
   </div>
-</section>
+</div>
 
 <footer>
   <div class="footer-inner">
@@ -642,7 +622,6 @@ fileInput.addEventListener('change',()=>{if(fileInput.files[0])loadFile(fileInpu
 function loadFile(f){
   const ext=f.name.split('.').pop().toLowerCase();
   if(!['pdf','png','jpg','jpeg'].includes(ext)){showToast('Nepodporovaný formát. Použij PDF, PNG nebo JPG.');return;}
-  if(f.size>20*1024*1024){showToast('Soubor je příliš velký (max. 20 MB).');return;}
   currentFile=f;
   document.getElementById('fileName').textContent=f.name;
   document.getElementById('fileMeta').textContent=formatSize(f.size)+' · '+ext.toUpperCase();
@@ -1002,17 +981,16 @@ function renderResult(){
   const {headers,rows}=tableData;
   colSelected=headers.map(()=>true);
 
-  document.getElementById('resultHead').innerHTML=
-    headers.map(h=>`<th>${escH(h)}</th>`).join('');
-  document.getElementById('resultBody').innerHTML=
-    rows.map((r,ri)=>
-      `<tr>${r.map((c,ci)=>
-        `<td contenteditable="true" class="editable-cell" data-r="${ri}" data-c="${ci}" onblur="cellEdit(this)">${escH(c)}</td>`
-      ).join('')}</tr>`
-    ).join('');
+  // Summary line
+  document.getElementById('resultSummary').textContent=rows.length+' řádků · '+headers.length+' sloupců';
+
+  // Keep table in DOM (hidden) for JS compatibility
+  document.getElementById('resultHead').innerHTML=headers.map(h=>`<th>${escH(h)}</th>`).join('');
+  document.getElementById('resultBody').innerHTML=rows.map((r,ri)=>
+    `<tr>${r.map((c,ci)=>`<td contenteditable="true" class="editable-cell" data-r="${ri}" data-c="${ci}" onblur="cellEdit(this)">${escH(c)}</td>`).join('')}</tr>`
+  ).join('');
 
   renderColPicker();
-  document.getElementById('rawContent').textContent=rawOCRText;
   document.getElementById('resultWrap').classList.add('visible');
   document.getElementById('resultWrap').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
