@@ -379,40 +379,21 @@
             <svg class="icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
+        <!-- hidden lang selector — always auto -->
+        <select id="srcLang" style="display:none"><option value="auto">auto</option></select>
         <div class="config-body">
-          <div class="config-row">
-            <div class="field-group">
-              <label class="field-label" for="srcLang">Jazyk dokumentu</label>
-              <select id="srcLang">
-                <option value="auto">Automatická detekce (CS+DE+EN)</option>
-                <option value="ces">Čeština</option>
-                <option value="deu">Němčina</option>
-                <option value="eng">Angličtina</option>
-              </select>
-            </div>
-            <div class="field-group">
-              <label class="field-label" for="outputFmt">Výstupní formát CSV</label>
-              <select id="outputFmt">
-                <option value="csv">CSV (středník ; )</option>
-                <option value="csv-comma">CSV (čárka , )</option>
-                <option value="tsv">TSV (tabulátor)</option>
-              </select>
-            </div>
-          </div>
-          <div class="field-group">
-            <label class="field-label" for="pdfPage">Strana PDF (pouze pro PDF soubory)</label>
+          <div id="pdfPageWrap" class="field-group" style="display:none">
+            <label class="field-label" for="pdfPage">Strana PDF</label>
             <select id="pdfPage">
               <option value="all">Všechny strany</option>
-              <option value="1">Strana 1</option>
-              <option value="2">Strana 2</option>
-              <option value="3">Strana 3</option>
-              <option value="4">Strana 4</option>
-              <option value="5">Strana 5</option>
-              <option value="6">Strana 6</option>
-              <option value="7">Strana 7</option>
-              <option value="8">Strana 8</option>
-              <option value="9">Strana 9</option>
-              <option value="10">Strana 10</option>
+            </select>
+          </div>
+          <div class="field-group">
+            <label class="field-label" for="outputFmt">Výstupní formát</label>
+            <select id="outputFmt">
+              <option value="csv">CSV (středník ; )</option>
+              <option value="csv-comma">CSV (čárka , )</option>
+              <option value="tsv">TSV (tabulátor)</option>
             </select>
           </div>
           <button class="btn btn-primary btn-lg btn-full" onclick="runOCR()" id="runBtn">
@@ -480,10 +461,10 @@
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
           </svg>
-          <div class="csv-banner-text">Chceš CSV dále upravit? <strong>Přejdi na upravcsv.eu</strong> – sesterský nástroj pro čištění a úpravy CSV dat.</div>
-          <a class="btn btn-primary btn-sm" href="https://upravcsv.eu" target="_blank" rel="noopener">
-            Otevřít <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
-          </a>
+          <div class="csv-banner-text"><strong>Přenést CSV do upravcsv.eu</strong> — otevře se CSV Cleaner a data se automaticky načtou.</div>
+          <button class="btn btn-primary btn-sm" onclick="openInCSVCleaner()">
+            Přenést CSV <svg class="icon" style="width:13px;height:13px;" viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="7 7 17 7 17 17"/></svg>
+          </button>
         </div>
       </div>
     </div>
@@ -625,19 +606,19 @@ function loadFile(f){
   currentFile=f;
   document.getElementById('fileName').textContent=f.name;
   document.getElementById('fileMeta').textContent=formatSize(f.size)+' · '+ext.toUpperCase();
-  const pageWrap=document.getElementById('pdfPage').parentElement;
-  pageWrap.style.display=ext==='pdf'?'flex':'none';
   document.getElementById('configPanel').classList.add('visible');
   document.getElementById('progressWrap').classList.remove('visible');
   document.getElementById('resultWrap').classList.remove('visible');
+  document.getElementById('pdfPageWrap').style.display='none';
   tableData=[];rawOCRText='';
-  // Detect actual page count for PDFs and update selector
+  // Detect actual page count for PDFs — show page selector only for multi-page PDFs
   if(ext==='pdf'){
     f.arrayBuffer().then(buf=>pdfjsLib.getDocument({data:buf}).promise).then(pdf=>{
       const n=pdf.numPages;
       const sel=document.getElementById('pdfPage');
       sel.innerHTML=(n>1?'<option value="all">Všechny strany ('+n+')</option>':'')+
         Array.from({length:n},(_,i)=>`<option value="${i+1}">Strana ${i+1}</option>`).join('');
+      document.getElementById('pdfPageWrap').style.display=n>1?'flex':'none';
     }).catch(()=>{});
   }
 }
@@ -1070,6 +1051,31 @@ function downloadCSV(){
 }
 function copyCSV(){
   navigator.clipboard.writeText(buildCSV()).then(()=>showToast('CSV zkopírováno do schránky.'));
+}
+
+/* ── Open in CSV Cleaner via postMessage ─────────────────── */
+let _csvTransferTimer=null;
+function openInCSVCleaner(){
+  const csv=buildCSV();
+  if(!csv){showToast('Nejdřív spusť extrakci.');return;}
+  const filename=(currentFile?currentFile.name.replace(/\.[^.]+$/,''):'doklad')+'_ocr.csv';
+  if(_csvTransferTimer)clearInterval(_csvTransferTimer);
+  const w=window.open('https://upravcsv.eu','csvCleaner');
+  if(!w){showToast('Otevři upravcsv.eu ručně — popup byl zablokován.');return;}
+  showToast('Otevírám CSV Cleaner — přenáším data…');
+  let attempts=0;
+  _csvTransferTimer=setInterval(()=>{
+    if(w.closed){clearInterval(_csvTransferTimer);return;}
+    w.postMessage({source:'upravpdf',type:'loadCSV',csv,filename},'https://upravcsv.eu');
+    if(++attempts>=20)clearInterval(_csvTransferTimer);
+  },500);
+  window.addEventListener('message',function ack(e){
+    if(e.data&&e.data.type==='csvReceived'&&e.origin==='https://upravcsv.eu'){
+      clearInterval(_csvTransferTimer);
+      window.removeEventListener('message',ack);
+      showToast('CSV přeneseno do CSV Cleaner!');
+    }
+  });
 }
 
 /* ── Toast ─────────────────────────────────────────────── */
