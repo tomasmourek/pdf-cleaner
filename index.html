@@ -392,7 +392,7 @@
             <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
           <div>
-            <div class="config-file-name" id="fileName">—</div>
+            <div class="config-file-name" id="fileName">—div>
             <div class="config-file-meta" id="fileMeta">—</div>
           </div>
           <button class="config-file-remove" onclick="removeFile()" title="Odebrat">
@@ -626,11 +626,11 @@ function handleGoogleAuth(){showToast('Google přihlášení bude dostupné po s
 let currentFile=null, rawOCRText='', tableData=[], _previewURL=null;
 const dropzone=document.getElementById('dropzone');
 const fileInput=document.getElementById('fileInput');
+const cameraInput=document.getElementById('cameraInput');
 dropzone.addEventListener('dragover',e=>{e.preventDefault();dropzone.classList.add('over');});
 dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('over'));
 dropzone.addEventListener('drop',e=>{e.preventDefault();dropzone.classList.remove('over');const f=e.dataTransfer.files[0];if(f)loadFile(f);});
 fileInput.addEventListener('change',()=>{if(fileInput.files[0])loadFile(fileInput.files[0]);});
-const cameraInput=document.getElementById('cameraInput');
 cameraInput.addEventListener('change',()=>{if(cameraInput.files[0])loadFile(cameraInput.files[0]);});
 function openCamera(){cameraInput.click();}
 
@@ -775,7 +775,7 @@ function setProgress(fill,pct,status,p,txt){
   status.textContent=txt;
 }
 
-/* ── Load image → HTMLImageElement ────────────────────── */
+/* ── Load image → HTMLImageElement ──────────────────────── */
 function loadImageFile(file){
   return new Promise((resolve,reject)=>{
     const img=new Image();
@@ -787,11 +787,12 @@ function loadImageFile(file){
   });
 }
 
-/* ── Image preprocessing: grayscale + auto-contrast ───────── */
+/* ── Image preprocessing: grayscale + auto-contrast ─────── */
 async function preprocessImageForOCR(file){
   const img=await loadImageFile(file);
   const W=img.naturalWidth||img.width||1000;
   const H=img.naturalHeight||img.height||1000;
+  // Scale down very large images (max 3200px on longest side) for speed
   const maxPx=3200;
   const sc=Math.min(1,maxPx/Math.max(W,H));
   const cw=Math.round(W*sc), ch=Math.round(H*sc);
@@ -799,18 +800,20 @@ async function preprocessImageForOCR(file){
   canvas.width=cw; canvas.height=ch;
   const ctx=canvas.getContext('2d');
   ctx.drawImage(img,0,0,cw,ch);
+  // Revoke the object URL now that pixels are on canvas
   if(img._objURL)URL.revokeObjectURL(img._objURL);
+  // Greyscale + auto-contrast
   const id=ctx.getImageData(0,0,cw,ch);
-  const data=id.data;
+  const d=id.data;
   let lo=255,hi=0;
-  for(let i=0;i<data.length;i+=4){
-    const v=0.299*data[i]+0.587*data[i+1]+0.114*data[i+2];
+  for(let i=0;i<d.length;i+=4){
+    const v=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2];
     if(v<lo)lo=v; if(v>hi)hi=v;
   }
   const rng=hi-lo||1;
-  for(let i=0;i<data.length;i+=4){
-    const v=Math.min(255,Math.round(((0.299*data[i]+0.587*data[i+1]+0.114*data[i+2])-lo)/rng*255));
-    data[i]=data[i+1]=data[i+2]=v;
+  for(let i=0;i<d.length;i+=4){
+    const v=Math.min(255,Math.round(((0.299*d[i]+0.587*d[i+1]+0.114*d[i+2])-lo)/rng*255));
+    d[i]=d[i+1]=d[i+2]=v;
   }
   ctx.putImageData(id,0,0);
   return canvas;
@@ -943,22 +946,63 @@ function reconstructFromItems(items,pageWidth){
     rows[i].sectionId=sectionId;
   }
 
-  // Cluster X positions into column anchors
-  // Use only rows with ≥3 items (= table rows) to build anchors —
-  // single-item lines (addresses, footers) would pollute the column detection
-  const tableRowItems=rows.filter(r=>r.items.length>=3);
-  const anchorSource=tableRowItems.length>=2?tableRowItems:rows;
-  const COL_TOL=Math.max(6,pageWidth*0.022);
-  const colAnchors=clusterValues(anchorSource.flatMap(r=>r.items.map(i=>i.x)),COL_TOL).sort((a,b)=>a-b);
-  if(colAnchors.length<2)return null; // need at least 2 columns to be a table
+  // ── Word-cluster based column detection ─────────────────────
+  // In invoice PDFs, "Název" cells contain multiple words (note text)
+  // on the same line as numeric values in adjacent columns.
+  // We first group nearby words into cells, then cluster cell left-edges.
+  // GAP_THRESH: inter-word gaps ≤ this = same cell; larger = column boundary
+  const GAP_THRESH=Math.max(20,medH*2);
+  function rowToClusters(rowItems){
+    if(!rowItems.length)return[];
+    const clusters=[[rowItems[0]]];
+    for(let i=1;i<rowItems.length;i++){
+      const prev=clusters[clusters.length-1];
+      const last=prev[prev.length-1];
+      const gap=rowItems[i].x-(last.x+(last.width||0));
+      if(gap<=GAP_THRESH) prev.push(rowItems[i]);
+      else clusters.push([rowItems[i]]);
+    }
+    return clusters.map(c=>({x:c[0].x,text:c.map(i=>i.text).join(' ')}));
+  }
+
+  // Find the dominant table section: highest score = numWideRows × spread
+  // "Wide rows" span ≥60% of page width and have ≥2 cell clusters
+  const sectionMap={};
+  for(const row of rows){if(!sectionMap[row.sectionId])sectionMap[row.sectionId]=[];sectionMap[row.sectionId].push(row);}
+  let bestSid=null,bestScore=-1;
+  for(const [sid,sRows] of Object.entries(sectionMap)){
+    const wideRows=sRows.filter(r=>{
+      if(r.items.length<2)return false;
+      const xs=r.items.map(i=>i.x);
+      return Math.max(...xs)-Math.min(...xs)>pageWidth*0.45;
+    });
+    if(wideRows.length<2)continue;
+    const clusterCounts=wideRows.map(r=>rowToClusters(r.items).length);
+    const avgClusters=clusterCounts.reduce((a,b)=>a+b,0)/clusterCounts.length;
+    const xs=wideRows.flatMap(r=>r.items.map(i=>i.x));
+    const spread=Math.max(...xs)-Math.min(...xs);
+    const sc=avgClusters*spread*wideRows.length;
+    if(sc>bestScore){bestScore=sc;bestSid=parseInt(sid);}
+  }
+
+  // Use CLUSTER LEFT-EDGES from the dominant section to build column anchors
+  const anchorRowsRaw=bestSid!==null
+    ?(sectionMap[bestSid]||[]).filter(r=>r.items.length>=2&&(Math.max(...r.items.map(i=>i.x))-Math.min(...r.items.map(i=>i.x)))>pageWidth*0.45)
+    :rows.filter(r=>r.items.length>=3);
+  const anchorSource=anchorRowsRaw.length>=2?anchorRowsRaw:rows.filter(r=>r.items.length>=3);
+  const COL_TOL=Math.max(8,pageWidth*0.025);
+  const clusterXs=anchorSource.flatMap(r=>rowToClusters(r.items).map(c=>c.x));
+  const colAnchors=clusterValues(clusterXs,COL_TOL).sort((a,b)=>a-b);
+  if(colAnchors.length<2)return null;
   const numCols=colAnchors.length;
 
-  // Map rows to cells
+  // Map rows to cells using cluster-based approach
   const mappedRows=rows.map(row=>{
     const cells=new Array(numCols).fill('');
-    for(const item of row.items){
-      const ci=nearestIndex(item.x,colAnchors);
-      cells[ci]=cells[ci]?cells[ci]+' '+item.text:item.text;
+    const clusters=rowToClusters(row.items);
+    for(const c of clusters){
+      const ci=nearestIndex(c.x,colAnchors);
+      cells[ci]=cells[ci]?cells[ci]+' '+c.text:c.text;
     }
     return{cells,sectionId:row.sectionId};
   });
