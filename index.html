@@ -392,7 +392,7 @@
             <svg class="icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
           </div>
           <div>
-            <div class="config-file-name" id="fileName">—div>
+            <div class="config-file-name" id="fileName">—</div>
             <div class="config-file-meta" id="fileMeta">—</div>
           </div>
           <button class="config-file-remove" onclick="removeFile()" title="Odebrat">
@@ -602,8 +602,7 @@ function switchTab(tab){
 }
 function handleLogin(){
   const email=document.getElementById('loginEmail').value.trim();
-  const pass=document.getElementById('loginPass').value;
-  if(!email||!pass){showToast('Vyplň e-mail a heslo.');return;}
+  if(!email){showToast('Vyplň e-mailovou adresu.');return;}
   if(!email.includes('@')){showToast('Zadej platný e-mail.');return;}
   currentUser={email,name:email.split('@')[0]};
   try{localStorage.setItem('pdftool-user',JSON.stringify(currentUser));}catch(e){}
