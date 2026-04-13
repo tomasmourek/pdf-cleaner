@@ -14,6 +14,9 @@ EXTRACTION_PROMPT = """Analyzuj tento text dodacího listu nebo faktury a extrah
 Text dokumentu:
 {text}
 
+DŮLEŽITÉ UPOZORNĚNÍ K FORMÁTU VSTUPNÍHO TEXTU:
+Dokument mohl být naskenován mírně nakřivo, takže záhlaví tabulky (např. "Množství DPH [%] Jedn. cena Sleva [%] Cena bez DPH") může být v textu rozděleno do dvou nebo více řádků. Vždy urči, které řádky patří k záhlaví tabulky, a spoj je do logické struktury. Hodnoty datových řádků přiřaď ke správným sloupcům podle kontextu a pozice v textu.
+
 Vrať JSON s touto strukturou (všechna pole jsou volitelná, vynech pokud chybí):
 {{
   "document_type": "invoice | delivery_note | order | unknown",
@@ -66,6 +69,7 @@ Pravidla:
 - Ceny jako float (desetinná tečka)
 - Confidence score 0.0-1.0 per pole
 - document_type: "invoice" = faktura, "delivery_note" = dodací list, "order" = objednávka
+- Pokud záhlaví sloupce tabulky chybí nebo je nejasné, odvoď ho z kontextu (pořadí hodnot, typ dat)
 - Vrať POUZE JSON, bez komentářů"""
 
 
